@@ -1,6 +1,6 @@
 
 # furly
-A package that compbines the fast asyync curl downloads and the blazing fast JSON parsing of RcppSimdJson
+A package that compbines the fast async curl downloads and the blazing fast JSON parsing of RcppSimdJson
 
 
 <!-- badges: start -->
