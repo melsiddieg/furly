@@ -1,12 +1,10 @@
 
 # furly
-A package that compbines the fast async curl downloads and the blazing fast JSON parsing of RcppSimdJson
-
 
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of furly is to ...
+The goal of furly is to compbine the fast async curl downloads and the blazing fast JSON parsing of RcppSimdJso
 
 ## Installation
 
