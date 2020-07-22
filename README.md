@@ -1,5 +1,7 @@
 
 # furly
+A package that compbines the fast asyync curl downloads and the blazing fast JSON parsing of RcppSimdJson
+
 
 <!-- badges: start -->
 <!-- badges: end -->
@@ -8,7 +10,11 @@ The goal of furly is to ...
 
 ## Installation
 
-You can install the released version of furly from [CRAN](https://CRAN.R-project.org) with:
+You can install the development version of furly from Github:
+```r
+devtools::install_github("melsiddieg/furly")
+```
+
 
 ``` r
 install.packages("furly")
