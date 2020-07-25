@@ -6,7 +6,7 @@ an R package for blazing fast parsing of JSON urls
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of furly is to compbine the fast async curl downloads and the blazing fast JSON parsing of RcppSimdJso
+The goal of furly is to combine the fast async curl downloads and the blazing fast JSON parsing of RcppSimdJso
 
 ## Installation
 
