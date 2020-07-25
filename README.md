@@ -1,5 +1,5 @@
 
-# furly
+# furly an R package for blazing fast parsing of JSON ursl
 
 <!-- badges: start -->
 <!-- badges: end -->
