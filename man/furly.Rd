@@ -16,10 +16,11 @@ a list of parsed json objects
 Fast downloads and parsing of multiple JSON urls
 }
 \examples{
-url <- "https://bit.ly/cellbase1"
-url2 <- "https://bit.ly/cellbase2"
-url3 <- "https://bit.ly/cellbase3"
-url4 <- "https://bit.ly/cellbase4"
-urls <- list(url,url2,url3,url4)
+urls <- paste0(
+  "http://bioinfo.hpc.cam.ac.uk/cellbase/webservices/rest/v4/hsapiens/feature/gene/ATM/snp?",
+  "limit=", 500,
+  "&skip=", c(-1, 500, 1000, 1500),
+  "&skipCount=false&count=false&Output\%20format=json&merge=false"
+)
 res<-furly(urls)
 }
