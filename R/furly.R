@@ -2,20 +2,21 @@
 #'
 #'
 #'
-#'@import curl
-#'@import RcppSimdJson
+#'@importFrom curl curl_fetch_multi multi_run new_pool
+#'@importFrom RcppSimdJson fparse
 #'@param urls a list of urls
 #'@return a list of parsed json objects
 #'@export
 #'@examples
-#'url <- "https://bit.ly/cellbase1"
-#'url2 <- "https://bit.ly/cellbase2"
-#'url3 <- "https://bit.ly/cellbase3"
-#'url4 <- "https://bit.ly/cellbase4"
-#'urls <- list(url,url2,url3,url4)
-#'res<-furly(urls)
+#' urls <- paste0(
+#'   "http://bioinfo.hpc.cam.ac.uk/cellbase/webservices/rest/v4/hsapiens/feature/gene/ATM/snp?",
+#'   "limit=", 500,
+#'   "&skip=", c(-1, 500, 1000, 1500),
+#'   "&skipCount=false&count=false&Output%20format=json&merge=false"
+#' )
+#' res<-furly(urls)
 furly <- function(urls){
-  e <- new.env()
+  e <- new.env(size = length(urls))
   success <- function(res){
     #cat("Request done! Status:", res$status, "\n")
     assign("data",c(e$data,list(res)),envir = e)
@@ -24,14 +25,13 @@ furly <- function(urls){
     cat("Oh noes! Request failed!", msg, "\n")
   }
 
-  pool <- curl::new_pool()
+  pool <- new_pool()
   # fill in the pool
-  sapply(urls, function(x)curl_fetch_multi(x,success, failure, pool = pool))
+  sapply(urls, function(x) curl_fetch_multi(x,success, failure, pool = pool))
   # run the request
-  out <- curl::multi_run(pool = pool)
-  data <- get("data", envir = e)
-  jsonContent <- sapply(data,function(x)rawToChar(x$content))
-  res <- RcppSimdJson::fparse(jsonContent)
+  out <- multi_run(pool = pool)
+
+  res <- fparse(lapply(e$data, `[[`, "content"))
   res
 
 }
