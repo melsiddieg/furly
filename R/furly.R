@@ -15,7 +15,7 @@
 #'   "&skipCount=false&count=false&Output%20format=json&merge=false"
 #' )
 #' res<-furly(urls)
-furly <- function(urls){
+furly <- function(urls,query=NULL){
   e <- new.env(size = length(urls))
   success <- function(res){
     #cat("Request done! Status:", res$status, "\n")
@@ -31,7 +31,7 @@ furly <- function(urls){
   # run the request
   out <- multi_run(pool = pool)
 
-  res <- fparse(lapply(e$data, `[[`, "content"))
+  res <- fparse(lapply(e$data, `[[`, "content"),query=query)
   res
 
 }
