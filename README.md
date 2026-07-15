@@ -87,8 +87,10 @@ furl_download(urls, destfiles = sprintf("out/%d.json", seq_along(urls)))
 
 ## Benchmarks
 
-`bench/benchmark.R` runs a reproducible comparison against a local
-[`webfakes`](https://webfakes.r-lib.org) server:
+**End-to-end (download + parse).** `bench/benchmark.R` runs a reproducible
+comparison against a local [`webfakes`](https://webfakes.r-lib.org) server,
+covering a `jsonlite` sequential loop, `RcppSimdJson::fload`, and `furly()` with
+each installed backend:
 
 ```r
 Rscript bench/benchmark.R 100
@@ -99,6 +101,30 @@ the local benchmark measures parsing throughput and correctness — not the
 latency-hiding win of concurrency. That win shows up against real remote servers
 that accept concurrent connections, where `curl`'s multi interface overlaps the
 round-trips instead of paying them one at a time.
+
+**Parser backends only.** `bench/parse_benchmark.R` isolates the JSON parsing
+layer — no network — so you can compare raw throughput of the `yyjsonr`,
+`RcppSimdJson`, and `jsonlite` backends (plus the `RcppSimdJson` JSON-Pointer
+`query=` path) on a synthesized corpus of raw JSON bodies:
+
+```r
+Rscript bench/parse_benchmark.R 2000 300   # n_docs, values_per_doc
+```
+
+Each backend is checked for correctness before timing. `microbenchmark` is used
+when installed; otherwise the script falls back to a built-in `replicate()`
+timer so it runs with no extra dependencies. A representative run parsing 2000
+documents (~2.7 MB) shows `RcppSimdJson` and `yyjsonr` an order of magnitude
+ahead of `jsonlite`:
+
+| Backend               | Median (ms) |
+|-----------------------|-------------|
+| `RcppSimdJson` (query)| ~3          |
+| `RcppSimdJson`        | ~5          |
+| `yyjsonr`             | ~7          |
+| `jsonlite`            | ~145        |
+
+(Absolute numbers vary by machine; the ratios are the point.)
 
 ## Verifying correctness
 
