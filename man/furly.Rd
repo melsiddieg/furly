@@ -2,25 +2,58 @@
 % Please edit documentation in R/furly.R
 \name{furly}
 \alias{furly}
-\title{Fast downloads and parsing of multiple JSON urls}
+\title{Fast concurrent download and parsing of many JSON URLs}
 \usage{
-furly(urls)
+furly(
+  urls,
+  query = NULL,
+  parser = c("auto", "yyjsonr", "RcppSimdJson", "jsonlite"),
+  on_error = c("keep", "null"),
+  ...
+)
 }
 \arguments{
-\item{urls}{a list of urls}
+\item{urls}{Character vector of JSON URLs.}
+
+\item{query}{Optional JSON Pointer(s) to extract from each document (e.g.
+\code{"/response/0/result"}). Supported by the \code{RcppSimdJson} backend, which is
+selected automatically when \code{query} is supplied.}
+
+\item{parser}{JSON backend: \code{"auto"} (default), \code{"yyjsonr"},
+\code{"RcppSimdJson"}, or \code{"jsonlite"}. \code{"auto"} uses \code{RcppSimdJson} when
+\code{query} is given, otherwise the fastest installed backend (\code{yyjsonr}, then
+\code{RcppSimdJson}, then \code{jsonlite}).}
+
+\item{on_error}{One of \code{"keep"} (default) to leave \code{furl_error} objects in
+place, or \code{"null"} to replace failed slots with \code{NULL}.}
+
+\item{...}{Additional arguments passed on to \code{\link[=furl_download]{furl_download()}} (e.g.
+\code{headers}, \code{timeout}, \code{max_tries}, \code{host_con}, \code{progress}).}
 }
 \value{
-a list of parsed json objects
+A list the same length as \code{urls}, in input order: parsed JSON for
+successes, and either a \code{furl_error} or \code{NULL} for failures (per
+\code{on_error}).
 }
 \description{
-Fast downloads and parsing of multiple JSON urls
+\code{furly()} downloads a set of JSON endpoints concurrently (see
+\code{\link[=furl_download]{furl_download()}}) and parses the successful responses with a fast, pluggable
+JSON backend. Results are returned \strong{in the same order as \code{urls}}; any URL
+that could not be fetched is left as a \code{furl_error} in its slot rather than
+being dropped, so the output always lines up with the input.
 }
 \examples{
+\dontrun{
 urls <- paste0(
-  "http://bioinfo.hpc.cam.ac.uk/cellbase/webservices/rest/v4/hsapiens/feature/gene/ATM/snp?",
-  "limit=", 500,
-  "&skip=", c(-1, 500, 1000, 1500),
-  "&skipCount=false&count=false&Output\%20format=json&merge=false"
+  "https://api.example.com/genes?limit=500",
+  "&skip=", c(0, 500, 1000, 1500)
 )
-res<-furly(urls)
+res <- furly(urls)                     # parsed, in order
+res <- furly(urls, query = "/result")  # extract a JSON Pointer per document
+furl_errors(res)                       # inspect any failures
+}
+}
+\seealso{
+\code{\link[=furl_download]{furl_download()}} for the raw download engine, \code{\link[=furl_errors]{furl_errors()}} to
+pull out the failures.
 }

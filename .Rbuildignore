@@ -1,3 +1,5 @@
 ^furly\.Rproj$
 ^\.Rproj\.user$
 ^LICENSE\.md$
+^bench$
+^\.github$
