@@ -84,3 +84,28 @@ parse_rcppsimdjson <- function(contents, query = NULL, ...) {
 parse_jsonlite <- function(contents, ...) {
   lapply(contents, function(raw) jsonlite::fromJSON(rawToChar(raw), ...))
 }
+
+#' Serialise an R object to a JSON string with the fastest installed backend.
+#'
+#' The request-body counterpart to [furl_parse()]. Elements that are already a
+#' raw vector or a single non-`NA` string are passed through untouched (assumed
+#' to be a pre-serialised body); everything else is JSON-encoded. Used by
+#' [furly()] to turn R payloads into request bodies.
+#'
+#' @param x A single R object to serialise (or a raw/character passthrough).
+#' @return A length-1 character string of JSON, or the original raw/character.
+#' @keywords internal
+#' @noRd
+furl_to_json <- function(x) {
+  if (is.raw(x)) return(x)
+  if (is.character(x) && length(x) == 1L && !is.na(x)) return(x)
+
+  if (requireNamespace("yyjsonr", quietly = TRUE)) {
+    return(yyjsonr::write_json_str(x, auto_unbox = TRUE))
+  }
+  if (requireNamespace("jsonlite", quietly = TRUE)) {
+    return(jsonlite::toJSON(x, auto_unbox = TRUE, null = "null"))
+  }
+  stop("Serialising a request body needs 'yyjsonr' or 'jsonlite'. ",
+       "Install one, or pass `body` as a JSON string/raw vector.", call. = FALSE)
+}

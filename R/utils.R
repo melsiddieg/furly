@@ -32,3 +32,32 @@ print.furl_error <- function(x, ...) {
   cat(sprintf("<furl_error%s> %s\n  %s\n", code, x$url, x$message))
   invisible(x)
 }
+
+#' Normalise a `body` argument into a per-URL list of serialised bodies.
+#'
+#' Turns the flexible `body` argument of [furl_download()] into either `NULL`
+#' (no bodies) or a length-`n` list whose elements are each a raw vector, a JSON
+#' string, or `NULL`. The disambiguation rule:
+#'   * `NULL` -> no body.
+#'   * an **unnamed list of length `n`** (with `n > 1`) -> one body per URL,
+#'     each element serialised independently.
+#'   * anything else (atomic scalar, raw vector, named list, single R object) ->
+#'     a single body serialised once and broadcast to every URL.
+#'
+#' @param body The user-supplied `body`.
+#' @param n Number of URLs.
+#' @return `NULL`, or a list of length `n`.
+#' @keywords internal
+#' @noRd
+normalize_bodies <- function(body, n) {
+  if (is.null(body) || n == 0L) return(NULL)
+
+  per_url <- is.list(body) && is.null(names(body)) && length(body) == n && n > 1L
+  if (per_url) {
+    return(lapply(body, function(b) if (is.null(b)) NULL else furl_to_json(b)))
+  }
+
+  # Single body: serialise once, reuse the same bytes for every URL.
+  one <- furl_to_json(body)
+  rep(list(one), n)
+}

@@ -16,7 +16,10 @@ furl_download(
   multiplex = TRUE,
   progress = FALSE,
   destfiles = NULL,
-  accept_encoding = "gzip"
+  accept_encoding = "gzip",
+  method = "GET",
+  body = NULL,
+  content_type = NULL
 )
 }
 \arguments{
@@ -53,6 +56,21 @@ transfer-size win on JSON/text APIs. Use \code{""} to advertise every codec the
 underlying libcurl supports (e.g. brotli/zstd if compiled in), or
 \code{"identity"} to disable compression for already-compressed payloads (e.g.
 binary files fetched with \code{destfiles}), avoiding wasted decompression.}
+
+\item{method}{HTTP method, \code{"GET"} (default) or a body method such as
+\code{"POST"}, \code{"PUT"}, \code{"PATCH"} (also \code{"DELETE"}, \code{"HEAD"}). Length 1 (applied
+to every URL) or a character vector aligned to \code{urls}.}
+
+\item{body}{Optional request body. \code{NULL} (default) for no body; a single
+value (raw vector, JSON string, or R object) sent with \strong{every} URL; or an
+\strong{unnamed list of length \code{length(urls)}} giving a per-URL body. R objects
+(and named lists) are serialised to JSON with the fastest installed backend
+(\code{yyjsonr}/\code{jsonlite}); raw vectors and length-1 strings are sent as-is.
+Supplying a \code{body} requires a non-GET \code{method}.}
+
+\item{content_type}{\code{Content-Type} header used when \code{body} is supplied.
+Defaults to \code{"application/json"}. Ignored if you set \code{Content-Type}
+yourself via \code{headers}.}
 }
 \value{
 A list aligned 1:1 with \code{urls}. Successful elements are \code{curl}
@@ -72,6 +90,13 @@ errors} (network failures, HTTP 429, HTTP 5xx) with exponential backoff.
 urls <- sprintf("https://httpbin.org/get?i=\%d", 1:5)
 res <- furl_download(urls)
 furl_errors(res)                 # any failures?
+
+# POST a different JSON body to each URL, concurrently.
+furl_download(
+  rep("https://httpbin.org/post", 3),
+  method = "POST",
+  body   = list(list(i = 1), list(i = 2), list(i = 3))
+)
 }
 }
 \seealso{

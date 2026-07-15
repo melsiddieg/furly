@@ -26,6 +26,18 @@
 #'   underlying libcurl supports (e.g. brotli/zstd if compiled in), or
 #'   `"identity"` to disable compression for already-compressed payloads (e.g.
 #'   binary files fetched with `destfiles`), avoiding wasted decompression.
+#' @param method HTTP method, `"GET"` (default) or a body method such as
+#'   `"POST"`, `"PUT"`, `"PATCH"` (also `"DELETE"`, `"HEAD"`). Length 1 (applied
+#'   to every URL) or a character vector aligned to `urls`.
+#' @param body Optional request body. `NULL` (default) for no body; a single
+#'   value (raw vector, JSON string, or R object) sent with **every** URL; or an
+#'   **unnamed list of length `length(urls)`** giving a per-URL body. R objects
+#'   (and named lists) are serialised to JSON with the fastest installed backend
+#'   (`yyjsonr`/`jsonlite`); raw vectors and length-1 strings are sent as-is.
+#'   Supplying a `body` requires a non-GET `method`.
+#' @param content_type `Content-Type` header used when `body` is supplied.
+#'   Defaults to `"application/json"`. Ignored if you set `Content-Type`
+#'   yourself via `headers`.
 #' @param destfiles Optional character vector of file paths, the same length as
 #'   `urls`. When supplied, each downloaded body is written to the corresponding
 #'   path (useful for saving binary payloads). The returned list then contains
@@ -43,6 +55,13 @@
 #' urls <- sprintf("https://httpbin.org/get?i=%d", 1:5)
 #' res <- furl_download(urls)
 #' furl_errors(res)                 # any failures?
+#'
+#' # POST a different JSON body to each URL, concurrently.
+#' furl_download(
+#'   rep("https://httpbin.org/post", 3),
+#'   method = "POST",
+#'   body   = list(list(i = 1), list(i = 2), list(i = 3))
+#' )
 #' }
 furl_download <- function(urls,
                           headers = NULL,
@@ -55,14 +74,41 @@ furl_download <- function(urls,
                           multiplex = TRUE,
                           progress = FALSE,
                           destfiles = NULL,
-                          accept_encoding = "gzip") {
+                          accept_encoding = "gzip",
+                          method = "GET",
+                          body = NULL,
+                          content_type = NULL) {
   urls <- as.character(urls)
+  n <- length(urls)
 
   if (!is.null(destfiles)) {
     destfiles <- as.character(destfiles)
-    if (length(destfiles) != length(urls)) {
+    if (length(destfiles) != n) {
       stop("`destfiles` must have the same length as `urls`.", call. = FALSE)
     }
+  }
+
+  method <- toupper(as.character(method))
+  if (!length(method) %in% c(1L, n)) {
+    stop("`method` must be length 1 or the same length as `urls`.", call. = FALSE)
+  }
+  bad <- setdiff(method, c("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"))
+  if (length(bad)) {
+    stop("Unsupported HTTP method: ", paste(unique(bad), collapse = ", "),
+         ".", call. = FALSE)
+  }
+
+  bodies <- normalize_bodies(body, n)
+  if (!is.null(bodies) && any(method == "GET")) {
+    stop("A request `body` requires a non-GET `method` (e.g. method = \"POST\").",
+         call. = FALSE)
+  }
+
+  # Default Content-Type for body requests, unless the caller set one already.
+  if (!is.null(bodies) &&
+      !any(tolower(names(headers)) == "content-type")) {
+    ct <- if (is.null(content_type)) "application/json" else content_type
+    headers <- c(headers, "Content-Type" = ct)
   }
 
   results <- furl_fetch(
@@ -76,7 +122,9 @@ furl_download <- function(urls,
     host_con = host_con,
     multiplex = multiplex,
     progress = progress,
-    accept_encoding = accept_encoding
+    accept_encoding = accept_encoding,
+    method = method,
+    bodies = bodies
   )
 
   if (!is.null(destfiles)) {

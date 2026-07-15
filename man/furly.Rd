@@ -51,6 +51,15 @@ urls <- paste0(
 res <- furly(urls)                     # parsed, in order
 res <- furly(urls, query = "/result")  # extract a JSON Pointer per document
 furl_errors(res)                       # inspect any failures
+
+# POST a batch of JSON bodies concurrently and parse the JSON replies
+# (method/body are forwarded to [furl_download()]).
+furly(
+  rep("https://api.example.com/v1/score", 3),
+  method  = "POST",
+  body    = list(list(text = "a"), list(text = "b"), list(text = "c")),
+  headers = c(Authorization = "Bearer <token>")
+)
 }
 }
 \seealso{

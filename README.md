@@ -80,6 +80,34 @@ res <- furl_download(
 furl_download(urls, destfiles = sprintf("out/%d.json", seq_along(urls)))
 ```
 
+### POST and request bodies
+
+Both `furly()` and `furl_download()` take `method` and `body`, so you can fan
+out `POST`/`PUT`/`PATCH` requests with the same order-preserving, retrying,
+drop-nothing contract as GET. R objects (and named lists) are serialized to
+JSON automatically (`Content-Type: application/json`); raw vectors and strings
+are sent as-is.
+
+```r
+# One shared body sent to every URL
+furly(urls, method = "POST", body = list(action = "refresh"))
+
+# A different body per URL (unnamed list, length == length(urls))
+furly(
+  rep("https://api.example.com/v1/score", 3),
+  method  = "POST",
+  body    = list(list(text = "a"), list(text = "b"), list(text = "c")),
+  headers = c(Authorization = "Bearer <token>")
+)
+```
+
+This is the shape most batch/LLM-style APIs want: many concurrent `POST`s to
+one endpoint, each with its own JSON payload, parsed back in input order.
+`body` disambiguates by structure — an **unnamed list of length `length(urls)`**
+is treated as one body per URL; anything else (a scalar, a raw vector, a named
+list, a JSON string) is a single body broadcast to all URLs. A `body` requires
+a non-GET `method`.
+
 ### Response compression
 
 Requests are sent with `Accept-Encoding: gzip` by default, and libcurl
