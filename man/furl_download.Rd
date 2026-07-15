@@ -60,9 +60,16 @@ errors} (network failures, HTTP 429, HTTP 5xx) with exponential backoff.
 }
 \examples{
 \dontrun{
-urls <- sprintf("https://httpbin.org/get?i=\%d", 1:5)
-res <- furl_download(urls)
-furl_errors(res)                 # any failures?
+repo <- "https://api.github.com/repos/melsiddieg/furly"
+urls <- paste0(repo, c("/commits", "/branches", "/tags", "/languages"))
+
+res <- furl_download(urls, useragent = "furly-demo", host_con = 8)
+vapply(res, function(x) x$status_code, integer(1))  # per-URL HTTP status
+furl_errors(res)                                     # any failures?
+
+# save each body to disk instead of returning it
+furl_download(urls, useragent = "furly-demo",
+              destfiles = sprintf("out-\%d.json", seq_along(urls)))
 }
 }
 \seealso{

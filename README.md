@@ -41,18 +41,30 @@ install.packages(c("yyjsonr", "RcppSimdJson"))  # optional, pick what you need
 
 ### JSON convenience layer
 
+A real, runnable example — fan out over the GitHub API to fetch the full detail
+of every commit in a repository:
+
 ```r
 library(furly)
 
-urls <- paste0(
-  "https://api.example.com/genes?limit=500",
-  "&skip=", c(0, 500, 1000, 1500)
-)
+repo <- "https://api.github.com/repos/melsiddieg/furly"
 
-res <- furly(urls)                      # parsed JSON, in input order
-res <- furly(urls, query = "/result")   # extract a JSON Pointer per document (RcppSimdJson)
-res <- furly(urls, parser = "yyjsonr")  # force a specific backend
-furl_errors(res)                        # which URLs failed, and why
+# list the commits (one request), then fetch each commit's detail concurrently
+commits <- furly(paste0(repo, "/commits"), useragent = "furly-demo")[[1]]
+urls    <- paste0(repo, "/commits/", commits$sha)
+
+details <- furly(urls, useragent = "furly-demo")   # parsed JSON, in input order
+vapply(details, function(x) x$commit$message, "")  # aligns 1:1 with `urls`
+
+furl_errors(details)                               # which URLs failed, and why
+```
+
+Other options:
+
+```r
+res <- furly(urls, query = "/commit/message")  # JSON Pointer per document (RcppSimdJson)
+res <- furly(urls, parser = "yyjsonr")         # force a specific backend
+res <- furly(urls, headers = c(Authorization = "Bearer <token>"))  # auth
 ```
 
 `furly()` stays backward compatible with the original `furly(urls, query = NULL)`
@@ -87,18 +99,35 @@ furl_download(urls, destfiles = sprintf("out/%d.json", seq_along(urls)))
 
 ## Benchmarks
 
-`bench/benchmark.R` runs a reproducible comparison against a local
+The win from concurrency is hiding network latency: a sequential loop pays one
+round-trip per URL, while `furly` overlaps them. `bench/benchmark.R` measures
+this against the **live GitHub API** — listing a repo's commits, then fetching
+every commit's detail:
+
+```r
+Rscript bench/benchmark.R melsiddieg/furly
+```
+
+Fetching **16 commit endpoints** (median of 5 runs, from this repo):
+
+| Method            | Median time | Speedup |
+|-------------------|------------:|--------:|
+| sequential loop   |      5.60 s |    1.0× |
+| `furly`           |      1.21 s |  **4.6×** |
+
+The speedup grows with the number of URLs and the per-request latency. Results
+are order-preserving with zero dropped responses. (Your exact numbers will vary
+with network conditions.)
+
+There is also an offline mode that compares the JSON backends against a local
 [`webfakes`](https://webfakes.r-lib.org) server:
 
 ```r
-Rscript bench/benchmark.R 100
+Rscript bench/benchmark.R --local 100
 ```
 
-Note: `webfakes`' in-process test server handles requests **sequentially**, so
-the local benchmark measures parsing throughput and correctness — not the
-latency-hiding win of concurrency. That win shows up against real remote servers
-that accept concurrent connections, where `curl`'s multi interface overlaps the
-round-trips instead of paying them one at a time.
+Note that `webfakes`' in-process server handles requests **sequentially**, so
+offline mode measures parsing throughput, not the latency-hiding win above.
 
 ## Verifying correctness
 

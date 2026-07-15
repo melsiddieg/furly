@@ -1,60 +1,99 @@
-## Reproducible benchmark for furly.
+## Reproducible benchmarks for furly.
 ##
-## Serves JSON from a local webfakes app (stable and offline, unlike the old
-## bit.ly links) and compares:
-##   * a jsonlite loop over sequential downloads
-##   * RcppSimdJson::fload (its own concurrent fetch + parse), if installed
-##   * furly() with each installed parser backend
+## Two scenarios:
 ##
-## Usage:  Rscript bench/benchmark.R [n_urls]
+##   A. Live GitHub API fan-out (default) -- the realistic case. List a repo's
+##      commits, then fetch every commit's full detail. Sequential downloads pay
+##      one network round-trip per commit; furly overlaps them. This is where
+##      concurrency actually wins.
 ##
-## Packages used here beyond furly's hard deps are optional; missing ones are
-## skipped.
+##      Rscript bench/benchmark.R [owner/repo]
+##
+##      Set a token for a higher rate limit (optional):
+##        GITHUB_PAT=ghp_xxx Rscript bench/benchmark.R tidyverse/dplyr
+##
+##   B. Offline parsing throughput against a local webfakes server, comparing
+##      the JSON backends. Note: webfakes' in-process server handles requests
+##      sequentially, so it measures parse speed + overhead, NOT the
+##      latency-hiding win -- for that, use scenario A.
+##
+##      Rscript bench/benchmark.R --local [n_urls]
 
-suppressMessages({
-  library(furly)
-  ok_wf <- requireNamespace("webfakes", quietly = TRUE)
-  ok_mb <- requireNamespace("microbenchmark", quietly = TRUE)
-  ok_jl <- requireNamespace("jsonlite", quietly = TRUE)
-  ok_sj <- requireNamespace("RcppSimdJson", quietly = TRUE)
-  ok_yy <- requireNamespace("yyjsonr", quietly = TRUE)
-})
+suppressMessages(library(furly))
 
-if (!ok_wf || !ok_mb) {
-  stop("This benchmark needs 'webfakes' and 'microbenchmark'.")
+timeit <- function(f, reps = 5L, pause = 0.3) {
+  ts <- numeric(reps)
+  for (i in seq_len(reps)) {
+    ts[i] <- system.time(f())["elapsed"]
+    Sys.sleep(pause)
+  }
+  ts
+}
+report <- function(name, ts) {
+  cat(sprintf("  %-22s min=%.3f  median=%.3f  max=%.3f\n",
+              name, min(ts), stats::median(ts), max(ts)))
+  invisible(stats::median(ts))
 }
 
 args <- commandArgs(trailingOnly = TRUE)
-n <- if (length(args) >= 1) as.integer(args[[1]]) else 100L
 
-# A payload of moderately sized JSON so parsing is measurable.
-app <- webfakes::new_app()
-app$get("/data/:id", function(req, res) {
-  id <- as.integer(req$params$id)
-  vals <- as.list(seq_len(50) + id)
-  res$set_header("Content-Type", "application/json")
-  res$send(jsonlite::toJSON(list(id = id, values = vals), auto_unbox = TRUE))
-})
-srv <- webfakes::local_app_process(app)
-on.exit(srv$stop(), add = TRUE)
+## ---------------------------------------------------------------------------
+## Scenario B: offline local server
+## ---------------------------------------------------------------------------
+if (length(args) >= 1 && args[[1]] == "--local") {
+  stopifnot(requireNamespace("webfakes", quietly = TRUE),
+            requireNamespace("jsonlite", quietly = TRUE))
+  n <- if (length(args) >= 2) as.integer(args[[2]]) else 100L
 
-urls <- paste0(srv$url(), "data/", seq_len(n))
+  app <- webfakes::new_app()
+  app$get("/data/:id", function(req, res) {
+    id <- as.integer(req$params$id)
+    res$set_header("Content-Type", "application/json")
+    res$send(jsonlite::toJSON(list(id = id, values = as.list(seq_len(50) + id)),
+                              auto_unbox = TRUE))
+  })
+  srv <- webfakes::local_app_process(app)
+  on.exit(srv$stop(), add = TRUE)
+  urls <- paste0(srv$url(), "data/", seq_len(n))
 
-exprs <- list()
-if (ok_jl) {
-  exprs$jsonlite_loop <- quote(lapply(urls, function(u) jsonlite::fromJSON(u)))
-}
-if (ok_sj) {
-  exprs$RcppSimdJson_fload <- quote(RcppSimdJson::fload(urls))
-  exprs$furly_RcppSimdJson <- quote(furly(urls, parser = "RcppSimdJson"))
-}
-if (ok_yy) {
-  exprs$furly_yyjsonr <- quote(furly(urls, parser = "yyjsonr"))
-}
-if (ok_jl) {
-  exprs$furly_jsonlite <- quote(furly(urls, parser = "jsonlite"))
+  cat(sprintf("Scenario B: %d URLs, local webfakes server\n", n))
+  report("jsonlite loop", timeit(function()
+    lapply(urls, function(u) jsonlite::fromJSON(u))))
+  for (p in c("yyjsonr", "RcppSimdJson", "jsonlite")) {
+    if (requireNamespace(p, quietly = TRUE)) {
+      report(paste0("furly(", p, ")"),
+             timeit(function() furly(urls, parser = p)))
+    }
+  }
+  quit(save = "no")
 }
 
-cat(sprintf("Benchmarking %d URLs against %s\n\n", n, srv$url()))
-bench <- microbenchmark::microbenchmark(list = exprs, times = 5L)
-print(bench)
+## ---------------------------------------------------------------------------
+## Scenario A: live GitHub API commit fan-out
+## ---------------------------------------------------------------------------
+stopifnot(requireNamespace("jsonlite", quietly = TRUE))
+repo <- if (length(args) >= 1) args[[1]] else "melsiddieg/furly"
+tok  <- Sys.getenv("GITHUB_PAT", Sys.getenv("GITHUB_TOKEN"))
+hdr  <- if (nzchar(tok)) c(Authorization = paste("Bearer", tok)) else NULL
+ua   <- "furly-benchmark"
+base <- paste0("https://api.github.com/repos/", repo)
+
+commits <- furly(paste0(base, "/commits?per_page=100"), parser = "jsonlite",
+                 useragent = ua, headers = hdr)[[1]]
+urls <- paste0(base, "/commits/", commits$sha)
+cat(sprintf("Scenario A: %d live commit endpoints from %s\n\n", length(urls), repo))
+
+## one sequential download + parse, honouring auth + user-agent
+fetch_one <- function(u) {
+  h <- curl::new_handle()
+  curl::handle_setopt(h, useragent = ua)
+  if (!is.null(hdr)) curl::handle_setheaders(h, .list = as.list(hdr))
+  jsonlite::fromJSON(rawToChar(curl::curl_fetch_memory(u, handle = h)$content))
+}
+seq_loop <- function() lapply(urls, fetch_one)
+fur      <- function() furly(urls, parser = "jsonlite", useragent = ua,
+                             headers = hdr, host_con = 10)
+
+t_seq <- report("sequential loop", timeit(seq_loop))
+t_fur <- report("furly", timeit(fur))
+cat(sprintf("\n  speedup (median): %.1fx\n", t_seq / t_fur))

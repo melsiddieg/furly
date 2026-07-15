@@ -33,9 +33,16 @@
 #' @export
 #' @examples
 #' \dontrun{
-#' urls <- sprintf("https://httpbin.org/get?i=%d", 1:5)
-#' res <- furl_download(urls)
-#' furl_errors(res)                 # any failures?
+#' repo <- "https://api.github.com/repos/melsiddieg/furly"
+#' urls <- paste0(repo, c("/commits", "/branches", "/tags", "/languages"))
+#'
+#' res <- furl_download(urls, useragent = "furly-demo", host_con = 8)
+#' vapply(res, function(x) x$status_code, integer(1))  # per-URL HTTP status
+#' furl_errors(res)                                     # any failures?
+#'
+#' # save each body to disk instead of returning it
+#' furl_download(urls, useragent = "furly-demo",
+#'               destfiles = sprintf("out-\%d.json", seq_along(urls)))
 #' }
 furl_download <- function(urls,
                           headers = NULL,
@@ -94,8 +101,10 @@ furl_download <- function(urls,
 #' @export
 #' @examples
 #' \dontrun{
-#' res <- furl_download(c("https://httpbin.org/get", "http://127.0.0.1:1/nope"))
-#' furl_errors(res)
+#' repo <- "https://api.github.com/repos/melsiddieg/furly"
+#' res <- furl_download(c(paste0(repo, "/commits"), "http://127.0.0.1:1/nope"),
+#'                      useragent = "furly-demo", max_tries = 1)
+#' furl_errors(res)   # names give the 1-based positions that failed
 #' }
 furl_errors <- function(x) {
   idx <- which(vapply(x, is_furl_error, logical(1)))

@@ -44,13 +44,16 @@ being dropped, so the output always lines up with the input.
 }
 \examples{
 \dontrun{
-urls <- paste0(
-  "https://api.example.com/genes?limit=500",
-  "&skip=", c(0, 500, 1000, 1500)
-)
-res <- furly(urls)                     # parsed, in order
-res <- furly(urls, query = "/result")  # extract a JSON Pointer per document
-furl_errors(res)                       # inspect any failures
+# Fan out over the GitHub API: fetch every commit's detail concurrently.
+repo <- "https://api.github.com/repos/melsiddieg/furly"
+commits <- furly(paste0(repo, "/commits"), useragent = "furly-demo")[[1]]
+urls <- paste0(repo, "/commits/", commits$sha)
+
+details <- furly(urls, useragent = "furly-demo")   # parsed, in input order
+vapply(details, function(x) x$commit$message, "")  # aligns 1:1 with `urls`
+
+furly(urls, query = "/commit/message", useragent = "furly-demo")  # JSON Pointer
+furl_errors(details)                               # inspect any failures
 }
 }
 \seealso{

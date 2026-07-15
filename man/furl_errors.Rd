@@ -20,7 +20,9 @@ or \code{\link[=furly]{furly()}}, keeping the original positions in the names so
 }
 \examples{
 \dontrun{
-res <- furl_download(c("https://httpbin.org/get", "http://127.0.0.1:1/nope"))
-furl_errors(res)
+repo <- "https://api.github.com/repos/melsiddieg/furly"
+res <- furl_download(c(paste0(repo, "/commits"), "http://127.0.0.1:1/nope"),
+                     useragent = "furly-demo", max_tries = 1)
+furl_errors(res)   # names give the 1-based positions that failed
 }
 }
