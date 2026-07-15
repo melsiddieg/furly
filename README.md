@@ -23,6 +23,9 @@ fan-out requests — while staying **correct**:
 - **GET and POST** — issue `GET`, or `POST`/`PUT`/`PATCH` with per-request
   bodies (JSON auto-serialized), for fan-out over write endpoints and batch
   APIs.
+- **Streaming** — `furl_stream()` fans out Server-Sent Event streams
+  concurrently, delivering events to a callback as they arrive (token-streaming
+  LLM APIs).
 
 ## Installation
 
@@ -107,6 +110,32 @@ one endpoint, each with its own JSON payload, parsed back in input order.
 is treated as one body per URL; anything else (a scalar, a raw vector, a named
 list, a JSON string) is a single body broadcast to all URLs. A `body` requires
 a non-GET `method`.
+
+### Streaming (Server-Sent Events)
+
+`furl_stream()` opens many streaming connections at once and delivers
+`text/event-stream` events to an `on_event` callback as they arrive — the
+streaming counterpart to `furly()`, aimed at token-streaming LLM APIs. It keeps
+the same order-preserving, drop-nothing contract (each slot of the result is
+that stream's events, or a `furl_error`). `method` defaults to `"POST"` since
+that is what streaming LLM endpoints use; each event's `data` is JSON-parsed
+under `parse = "auto"`.
+
+```r
+furl_stream(
+  "https://api.example.com/v1/chat/completions",
+  on_event = function(ev, i) {
+    if (!identical(ev$data, "[DONE]"))
+      cat(ev$data$choices[[1]]$delta$content)   # print tokens as they stream
+  },
+  headers = c(Authorization = "Bearer <token>"),
+  body = list(model = "x", stream = TRUE,
+              messages = list(list(role = "user", content = "hi")))
+)
+```
+
+Streams are **not** retried (a partially consumed stream can't be safely
+replayed); a connection failure yields a `furl_error` in that slot.
 
 ### Response compression
 

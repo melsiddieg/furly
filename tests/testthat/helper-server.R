@@ -61,6 +61,18 @@ new_test_app <- function() {
                   auto_unbox = TRUE)
   })
 
+  app$get("/sse", function(req, res) {
+    # A small event stream: a bare data event, a named event, then the
+    # OpenAI-style [DONE] sentinel. Sent as one body; furly's frame parser
+    # splits it into three events.
+    res$set_header("Content-Type", "text/event-stream")
+    res$send(paste0(
+      "data: {\"i\": 1}\n\n",
+      "event: tick\ndata: {\"i\": 2}\n\n",
+      "data: [DONE]\n\n"
+    ))
+  })
+
   app$post("/flaky-post/:key", function(req, res) {
     key <- paste0("post-", req$params$key)
     prev <- flaky_counts[[key]]

@@ -68,27 +68,14 @@ furl_fetch <- function(urls,
   # (which the multiplexing pool can share over one connection to the same
   # host).
   build_handle <- function(idx) {
-    h <- curl::new_handle()
-    curl::handle_setopt(
-      h,
+    furl_build_handle(
+      method = method[idx],
+      body = if (is.null(bodies)) NULL else bodies[[idx]],
+      headers = headers,
+      useragent = useragent,
       timeout = timeout,
-      accept_encoding = accept_encoding,
-      http_version = 2L  # CURL_HTTP_VERSION_2TLS: negotiate HTTP/2 where possible
+      accept_encoding = accept_encoding
     )
-    if (!is.null(useragent)) curl::handle_setopt(h, useragent = useragent)
-
-    body <- if (is.null(bodies)) NULL else bodies[[idx]]
-    if (!is.null(body)) {
-      # copypostfields makes libcurl take its own copy of the bytes, so the
-      # handle stays valid across retries and after the R object is gc'd.
-      curl::handle_setopt(h, post = TRUE, copypostfields = body)
-    }
-    if (method[idx] != "GET") {
-      curl::handle_setopt(h, customrequest = method[idx])
-    }
-
-    if (!is.null(headers)) curl::handle_setheaders(h, .list = as.list(headers))
-    h
   }
 
   pb <- NULL
@@ -170,4 +157,44 @@ furl_fetch <- function(urls,
 #' @noRd
 retryable_status <- function(code) {
   !is.null(code) && (code == 429L || code >= 500L)
+}
+
+#' Build a single curl handle for one request.
+#'
+#' Shared by the buffered engine ([furl_fetch()]) and the streaming engine
+#' ([furl_stream()]): applies timeout, compression, HTTP/2, user-agent, the
+#' request method, an optional (already-serialised) body, and headers.
+#'
+#' @param method Single HTTP method, e.g. `"GET"` or `"POST"`.
+#' @param body `NULL`, or a raw vector / single string request body.
+#' @param headers Named character vector of headers, or `NULL`.
+#' @param useragent Optional `User-Agent`.
+#' @param timeout Request timeout in seconds (`0` = none).
+#' @param accept_encoding `Accept-Encoding` value.
+#' @return A `curl` handle.
+#' @keywords internal
+#' @importFrom curl new_handle handle_setopt handle_setheaders
+#' @noRd
+furl_build_handle <- function(method = "GET", body = NULL, headers = NULL,
+                              useragent = NULL, timeout = 0,
+                              accept_encoding = "gzip") {
+  method <- toupper(method)
+  h <- curl::new_handle()
+  curl::handle_setopt(
+    h,
+    timeout = timeout,
+    accept_encoding = accept_encoding,
+    http_version = 2L  # CURL_HTTP_VERSION_2TLS: negotiate HTTP/2 where possible
+  )
+  if (!is.null(useragent)) curl::handle_setopt(h, useragent = useragent)
+
+  if (!is.null(body)) {
+    # copypostfields makes libcurl take its own copy of the bytes, so the
+    # handle stays valid across retries and after the R object is gc'd.
+    curl::handle_setopt(h, post = TRUE, copypostfields = body)
+  }
+  if (method != "GET") curl::handle_setopt(h, customrequest = method)
+
+  if (!is.null(headers)) curl::handle_setheaders(h, .list = as.list(headers))
+  h
 }
