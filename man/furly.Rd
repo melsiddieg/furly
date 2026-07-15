@@ -9,6 +9,7 @@ furly(
   query = NULL,
   parser = c("auto", "yyjsonr", "RcppSimdJson", "jsonlite"),
   on_error = c("keep", "null"),
+  engine = c("curl", "crul"),
   ...
 )
 }
@@ -26,6 +27,9 @@ selected automatically when \code{query} is supplied.}
 
 \item{on_error}{One of \code{"keep"} (default) to leave \code{furl_error} objects in
 place, or \code{"null"} to replace failed slots with \code{NULL}.}
+
+\item{engine}{Concurrency backend passed to \code{\link[=furl_download]{furl_download()}}: \code{"curl"}
+(default) or \code{"crul"}. See \code{\link[=furl_download]{furl_download()}} for details.}
 
 \item{...}{Additional arguments passed on to \code{\link[=furl_download]{furl_download()}} (e.g.
 \code{headers}, \code{timeout}, \code{max_tries}, \code{host_con}, \code{progress}).}

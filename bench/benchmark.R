@@ -18,6 +18,7 @@ suppressMessages({
   ok_jl <- requireNamespace("jsonlite", quietly = TRUE)
   ok_sj <- requireNamespace("RcppSimdJson", quietly = TRUE)
   ok_yy <- requireNamespace("yyjsonr", quietly = TRUE)
+  ok_crul <- requireNamespace("crul", quietly = TRUE)
 })
 
 if (!ok_wf || !ok_mb) {
@@ -53,6 +54,16 @@ if (ok_yy) {
 }
 if (ok_jl) {
   exprs$furly_jsonlite <- quote(furly(urls, parser = "jsonlite"))
+}
+
+# Engine comparison: the same furly() call over the curl vs crul concurrency
+# backends, holding the parser fixed so only the download engine varies.
+if (ok_crul) {
+  parser_for_engine <- if (ok_yy) "yyjsonr" else if (ok_sj) "RcppSimdJson" else "jsonlite"
+  exprs$furly_curl_engine <- bquote(
+    furly(urls, parser = .(parser_for_engine), engine = "curl"))
+  exprs$furly_crul_engine <- bquote(
+    furly(urls, parser = .(parser_for_engine), engine = "crul"))
 }
 
 cat(sprintf("Benchmarking %d URLs against %s\n\n", n, srv$url()))

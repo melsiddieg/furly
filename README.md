@@ -6,8 +6,8 @@ An R package for **blazing-fast concurrent downloads** and JSON parsing.
 <!-- badges: start -->
 <!-- badges: end -->
 
-`furly` combines `curl`'s asynchronous, HTTP/2-multiplexing multi interface with
-a fast, pluggable JSON parser (`yyjsonr`, `RcppSimdJson`, or `jsonlite`). It is
+`furly` combines an asynchronous, HTTP/2-multiplexing download engine with a
+fast, pluggable JSON parser (`yyjsonr`, `RcppSimdJson`, or `jsonlite`). It is
 built for fetching many endpoints at once — paginated APIs, batches of records,
 fan-out requests — while staying **correct**:
 
@@ -20,6 +20,9 @@ fan-out requests — while staying **correct**:
   5xx) are retried with exponential backoff.
 - **Configurable** — custom headers/auth, timeouts, user-agent, and
   connection/multiplexing limits.
+- **Pluggable engine** — download concurrently through `curl`'s multi interface
+  (default) or ropensci's [`crul`](https://docs.ropensci.org/crul/) async
+  client, with an identical order/error/retry contract either way.
 
 ## Installation
 
@@ -76,6 +79,31 @@ res <- furl_download(
 # save bodies to disk instead of returning them
 furl_download(urls, destfiles = sprintf("out/%d.json", seq_along(urls)))
 ```
+
+### Concurrency engines
+
+Both `furly()` and `furl_download()` take an `engine` argument that selects the
+backend issuing the concurrent requests:
+
+```r
+res <- furly(urls)                      # engine = "curl"  (default)
+res <- furly(urls, engine = "crul")     # ropensci's async client
+furl_download(urls, engine = "crul")    # same for the raw download engine
+```
+
+- **`"curl"`** (default) drives [`curl`](https://jeroen.r-lib.org/curl/)'s
+  asynchronous multi interface directly, with a tunable connection pool
+  (`total_con`, `host_con`, `multiplex`).
+- **`"crul"`** uses [`crul::AsyncVaried`](https://docs.ropensci.org/crul/), a
+  higher-level asynchronous HTTP client layered on the same libcurl multi core.
+  Install it with `install.packages("crul")`.
+
+Both engines make truly concurrent (non-blocking) requests over one shared
+event loop and honour the **identical contract** — input order preserved, a
+`furl_error` in every failed slot, and transient errors retried with
+exponential backoff — so switching engines never changes results, only the
+underlying client. Connection-pool tuning (`total_con`/`host_con`/`multiplex`)
+applies to the `curl` engine; the `crul` engine uses libcurl's default pool.
 
 ## Parser backends
 

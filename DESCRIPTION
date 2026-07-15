@@ -10,16 +10,18 @@ Authors@R:
 Description: Downloads many URLs concurrently using the asynchronous, HTTP/2
     multiplexing multi interface of 'curl', preserving input order, reporting
     per-URL failures, and retrying transient errors with exponential backoff.
-    A convenience layer parses JSON responses with a pluggable, fast backend
-    ('yyjsonr', 'RcppSimdJson', or 'jsonlite').
+    The concurrency engine is pluggable: 'curl' by default, or the higher-level
+    asynchronous client from 'crul'. A convenience layer parses JSON responses
+    with a pluggable, fast backend ('yyjsonr', 'RcppSimdJson', or 'jsonlite').
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.1.1
+RoxygenNote: 7.3.3
 Imports:
     curl,
     utils
 Suggests:
+    crul,
     yyjsonr,
     RcppSimdJson (>= 0.1.1),
     jsonlite,
