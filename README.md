@@ -20,9 +20,12 @@ fan-out requests — while staying **correct**:
   5xx) are retried with exponential backoff.
 - **Configurable** — custom headers/auth, timeouts, user-agent, and
   connection/multiplexing limits.
-- **Pluggable engine** — download concurrently through `curl`'s multi interface
-  (default) or ropensci's [`crul`](https://docs.ropensci.org/crul/) async
-  client, with an identical order/error/retry contract either way.
+- **GET and POST** — issue `GET`, or `POST`/`PUT`/`PATCH` with per-request
+  bodies (JSON auto-serialized), for fan-out over write endpoints and batch
+  APIs.
+- **Streaming** — `furl_stream()` fans out Server-Sent Event streams
+  concurrently, delivering events to a callback as they arrive (token-streaming
+  LLM APIs).
 
 ## Installation
 
@@ -80,30 +83,59 @@ res <- furl_download(
 furl_download(urls, destfiles = sprintf("out/%d.json", seq_along(urls)))
 ```
 
-### Concurrency engines
+### POST and request bodies
 
-Both `furly()` and `furl_download()` take an `engine` argument that selects the
-backend issuing the concurrent requests:
+Both `furly()` and `furl_download()` take `method` and `body`, so you can fan
+out `POST`/`PUT`/`PATCH` requests with the same order-preserving, retrying,
+drop-nothing contract as GET. R objects (and named lists) are serialized to
+JSON automatically (`Content-Type: application/json`); raw vectors and strings
+are sent as-is.
 
 ```r
-res <- furly(urls)                      # engine = "curl"  (default)
-res <- furly(urls, engine = "crul")     # ropensci's async client
-furl_download(urls, engine = "crul")    # same for the raw download engine
+# One shared body sent to every URL
+furly(urls, method = "POST", body = list(action = "refresh"))
+
+# A different body per URL (unnamed list, length == length(urls))
+furly(
+  rep("https://api.example.com/v1/score", 3),
+  method  = "POST",
+  body    = list(list(text = "a"), list(text = "b"), list(text = "c")),
+  headers = c(Authorization = "Bearer <token>")
+)
 ```
 
-- **`"curl"`** (default) drives [`curl`](https://jeroen.r-lib.org/curl/)'s
-  asynchronous multi interface directly, with a tunable connection pool
-  (`total_con`, `host_con`, `multiplex`).
-- **`"crul"`** uses [`crul::AsyncVaried`](https://docs.ropensci.org/crul/), a
-  higher-level asynchronous HTTP client layered on the same libcurl multi core.
-  Install it with `install.packages("crul")`.
+This is the shape most batch/LLM-style APIs want: many concurrent `POST`s to
+one endpoint, each with its own JSON payload, parsed back in input order.
+`body` disambiguates by structure — an **unnamed list of length `length(urls)`**
+is treated as one body per URL; anything else (a scalar, a raw vector, a named
+list, a JSON string) is a single body broadcast to all URLs. A `body` requires
+a non-GET `method`.
 
-Both engines make truly concurrent (non-blocking) requests over one shared
-event loop and honour the **identical contract** — input order preserved, a
-`furl_error` in every failed slot, and transient errors retried with
-exponential backoff — so switching engines never changes results, only the
-underlying client. Connection-pool tuning (`total_con`/`host_con`/`multiplex`)
-applies to the `curl` engine; the `crul` engine uses libcurl's default pool.
+### Streaming (Server-Sent Events)
+
+`furl_stream()` opens many streaming connections at once and delivers
+`text/event-stream` events to an `on_event` callback as they arrive — the
+streaming counterpart to `furly()`, aimed at token-streaming LLM APIs. It keeps
+the same order-preserving, drop-nothing contract (each slot of the result is
+that stream's events, or a `furl_error`). `method` defaults to `"POST"` since
+that is what streaming LLM endpoints use; each event's `data` is JSON-parsed
+under `parse = "auto"`.
+
+```r
+furl_stream(
+  "https://api.example.com/v1/chat/completions",
+  on_event = function(ev, i) {
+    if (!identical(ev$data, "[DONE]"))
+      cat(ev$data$choices[[1]]$delta$content)   # print tokens as they stream
+  },
+  headers = c(Authorization = "Bearer <token>"),
+  body = list(model = "x", stream = TRUE,
+              messages = list(list(role = "user", content = "hi")))
+)
+```
+
+Streams are **not** retried (a partially consumed stream can't be safely
+replayed); a connection failure yields a `furl_error` in that slot.
 
 ### Response compression
 
@@ -170,9 +202,9 @@ ahead of `jsonlite`:
 
 **vs. `httr` (concurrent vs sequential).** `bench/httr_benchmark.R` compares
 `furly()` against a sequential `httr` download loop on JSON-heavy payloads,
-across every parser backend and both engines. It needs a *concurrent* server,
-so it drives a small threaded one (`bench/json_server.py`) instead of the
-sequential `webfakes` process:
+across every parser backend. It needs a *concurrent* server, so it drives a
+small threaded one (`bench/json_server.py`) instead of the sequential
+`webfakes` process:
 
 ```r
 python3 bench/json_server.py 8099 &        # threaded JSON server

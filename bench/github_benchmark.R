@@ -22,7 +22,6 @@ suppressMessages({
   library(microbenchmark)
   ok_sj <- requireNamespace("RcppSimdJson", quietly = TRUE)
   ok_yy <- requireNamespace("yyjsonr", quietly = TRUE)
-  ok_crul <- requireNamespace("crul", quietly = TRUE)
 })
 
 args     <- commandArgs(trailingOnly = TRUE)
@@ -61,8 +60,8 @@ httr_seq_yyjsonr <- function(urls) {
   })
 }
 # furly with GitHub auth headers + UA baked in.
-furly_gh <- function(urls, parser, engine = "curl") {
-  furly(urls, parser = parser, engine = engine,
+furly_gh <- function(urls, parser) {
+  furly(urls, parser = parser,
         headers = gh_hdrs, useragent = ua, host_con = host_con, max_tries = 3L)
 }
 
@@ -114,7 +113,6 @@ if (ok_yy) {
   exprs$furly_yyjsonr    <- quote(furly_gh(urls, "yyjsonr"))
 }
 if (ok_sj) exprs$furly_RcppSimdJson <- quote(furly_gh(urls, "RcppSimdJson"))
-if (ok_crul && ok_yy) exprs$furly_yyjsonr_crul <- quote(furly_gh(urls, "yyjsonr", engine = "crul"))
 
 # times kept low: this hits a real, shared, rate-limited service.
 mb <- microbenchmark::microbenchmark(list = exprs, times = 3L)

@@ -9,7 +9,6 @@ furly(
   query = NULL,
   parser = c("auto", "yyjsonr", "RcppSimdJson", "jsonlite"),
   on_error = c("keep", "null"),
-  engine = c("curl", "crul"),
   ...
 )
 }
@@ -27,9 +26,6 @@ selected automatically when \code{query} is supplied.}
 
 \item{on_error}{One of \code{"keep"} (default) to leave \code{furl_error} objects in
 place, or \code{"null"} to replace failed slots with \code{NULL}.}
-
-\item{engine}{Concurrency backend passed to \code{\link[=furl_download]{furl_download()}}: \code{"curl"}
-(default) or \code{"crul"}. See \code{\link[=furl_download]{furl_download()}} for details.}
 
 \item{...}{Additional arguments passed on to \code{\link[=furl_download]{furl_download()}} (e.g.
 \code{headers}, \code{timeout}, \code{max_tries}, \code{host_con}, \code{progress}).}
@@ -55,6 +51,15 @@ urls <- paste0(
 res <- furly(urls)                     # parsed, in order
 res <- furly(urls, query = "/result")  # extract a JSON Pointer per document
 furl_errors(res)                       # inspect any failures
+
+# POST a batch of JSON bodies concurrently and parse the JSON replies
+# (method/body are forwarded to [furl_download()]).
+furly(
+  rep("https://api.example.com/v1/score", 3),
+  method  = "POST",
+  body    = list(list(text = "a"), list(text = "b"), list(text = "c")),
+  headers = c(Authorization = "Bearer <token>")
+)
 }
 }
 \seealso{

@@ -16,8 +16,6 @@
 #'   `RcppSimdJson`, then `jsonlite`).
 #' @param on_error One of `"keep"` (default) to leave `furl_error` objects in
 #'   place, or `"null"` to replace failed slots with `NULL`.
-#' @param engine Concurrency backend passed to [furl_download()]: `"curl"`
-#'   (default) or `"crul"`. See [furl_download()] for details.
 #' @param ... Additional arguments passed on to [furl_download()] (e.g.
 #'   `headers`, `timeout`, `max_tries`, `host_con`, `progress`).
 #'
@@ -37,17 +35,24 @@
 #' res <- furly(urls)                     # parsed, in order
 #' res <- furly(urls, query = "/result")  # extract a JSON Pointer per document
 #' furl_errors(res)                       # inspect any failures
+#'
+#' # POST a batch of JSON bodies concurrently and parse the JSON replies
+#' # (method/body are forwarded to [furl_download()]).
+#' furly(
+#'   rep("https://api.example.com/v1/score", 3),
+#'   method  = "POST",
+#'   body    = list(list(text = "a"), list(text = "b"), list(text = "c")),
+#'   headers = c(Authorization = "Bearer <token>")
+#' )
 #' }
 furly <- function(urls, query = NULL,
                   parser = c("auto", "yyjsonr", "RcppSimdJson", "jsonlite"),
                   on_error = c("keep", "null"),
-                  engine = c("curl", "crul"),
                   ...) {
   parser <- match.arg(parser)
   on_error <- match.arg(on_error)
-  engine <- match.arg(engine)
 
-  responses <- furl_download(urls, engine = engine, ...)
+  responses <- furl_download(urls, ...)
 
   ok <- !vapply(responses, is_furl_error, logical(1))
   out <- vector("list", length(responses))

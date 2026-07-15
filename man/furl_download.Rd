@@ -17,7 +17,9 @@ furl_download(
   progress = FALSE,
   destfiles = NULL,
   accept_encoding = "gzip",
-  engine = c("curl", "crul")
+  method = "GET",
+  body = NULL,
+  content_type = NULL
 )
 }
 \arguments{
@@ -38,7 +40,7 @@ retried.}
 
 \item{total_con, host_con, multiplex}{Concurrency tuning passed to
 \code{\link[curl:multi]{curl::new_pool()}}: total simultaneous connections, per-host limit, and
-HTTP/2 multiplexing. Applies to \code{engine = "curl"} only.}
+HTTP/2 multiplexing.}
 
 \item{progress}{Show a text progress bar.}
 
@@ -55,16 +57,24 @@ underlying libcurl supports (e.g. brotli/zstd if compiled in), or
 \code{"identity"} to disable compression for already-compressed payloads (e.g.
 binary files fetched with \code{destfiles}), avoiding wasted decompression.}
 
-\item{engine}{Concurrency backend: \code{"curl"} (default) drives \code{curl}'s
-asynchronous multi interface directly; \code{"crul"} uses the optional
-\code{\link[crul:crul-package]{crul}} package's \code{AsyncVaried} interface over the
-same libcurl core. Both preserve order, report per-URL failures, and retry
-transient errors identically.}
+\item{method}{HTTP method, \code{"GET"} (default) or a body method such as
+\code{"POST"}, \code{"PUT"}, \code{"PATCH"} (also \code{"DELETE"}, \code{"HEAD"}). Length 1 (applied
+to every URL) or a character vector aligned to \code{urls}.}
+
+\item{body}{Optional request body. \code{NULL} (default) for no body; a single
+value (raw vector, JSON string, or R object) sent with \strong{every} URL; or an
+\strong{unnamed list of length \code{length(urls)}} giving a per-URL body. R objects
+(and named lists) are serialised to JSON with the fastest installed backend
+(\code{yyjsonr}/\code{jsonlite}); raw vectors and length-1 strings are sent as-is.
+Supplying a \code{body} requires a non-GET \code{method}.}
+
+\item{content_type}{\code{Content-Type} header used when \code{body} is supplied.
+Defaults to \code{"application/json"}. Ignored if you set \code{Content-Type}
+yourself via \code{headers}.}
 }
 \value{
-A list aligned 1:1 with \code{urls}. Successful elements are response
-objects (\code{curl} responses for \code{engine = "curl"}, \code{crul::HttpResponse}
-objects for \code{engine = "crul"}; both expose \verb{$status_code} and \verb{$content}),
+A list aligned 1:1 with \code{urls}. Successful elements are \code{curl}
+response objects (with \verb{$status_code}, \verb{$content}, \verb{$headers}, \verb{$times}),
 or destination paths when \code{destfiles} is used. Failed elements are
 \code{furl_error} objects. Retrieve just the failures with \code{\link[=furl_errors]{furl_errors()}}.
 }
@@ -80,6 +90,13 @@ errors} (network failures, HTTP 429, HTTP 5xx) with exponential backoff.
 urls <- sprintf("https://httpbin.org/get?i=\%d", 1:5)
 res <- furl_download(urls)
 furl_errors(res)                 # any failures?
+
+# POST a different JSON body to each URL, concurrently.
+furl_download(
+  rep("https://httpbin.org/post", 3),
+  method = "POST",
+  body   = list(list(i = 1), list(i = 2), list(i = 3))
+)
 }
 }
 \seealso{
