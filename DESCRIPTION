@@ -1,18 +1,29 @@
 Package: furly
-Title: What the Package Does (One Line, Title Case)
-Version: 0.0.0.9000
-Authors@R: 
+Title: Blazing Fast Concurrent Downloads and JSON Parsing
+Version: 0.1.0
+Authors@R:
     person(given = "Mohammed O.E",
            family = "Abdallah",
            role = c("aut", "cre"),
            email = "melsiddieg@gmail.com",
            comment = c(ORCID = "https://orcid.org/0000-0002-5374-0657"))
-Description: What the package does (one paragraph).
+Description: Downloads many URLs concurrently using the asynchronous, HTTP/2
+    multiplexing multi interface of 'curl', preserving input order, reporting
+    per-URL failures, and retrying transient errors with exponential backoff.
+    A convenience layer parses JSON responses with a pluggable, fast backend
+    ('yyjsonr', 'RcppSimdJson', or 'jsonlite').
 License: MIT + file LICENSE
 Encoding: UTF-8
-LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
-Imports: 
+Imports:
+    curl,
+    utils
+Suggests:
+    yyjsonr,
     RcppSimdJson (>= 0.1.1),
-    curl
+    jsonlite,
+    testthat (>= 3.0.0),
+    webfakes,
+    microbenchmark
+Config/testthat/edition: 3

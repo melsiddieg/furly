@@ -1,51 +1,111 @@
 
-# furly 
+# furly
 
-an R package for blazing fast parsing of JSON urls
+An R package for **blazing-fast concurrent downloads** and JSON parsing.
 
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of furly is to combine the fast async curl downloads and the blazing fast JSON parsing of RcppSimdJso
+`furly` combines `curl`'s asynchronous, HTTP/2-multiplexing multi interface with
+a fast, pluggable JSON parser (`yyjsonr`, `RcppSimdJson`, or `jsonlite`). It is
+built for fetching many endpoints at once — paginated APIs, batches of records,
+fan-out requests — while staying **correct**:
+
+- **Order-preserving** — results line up 1:1 with the input URLs (a naive async
+  loop returns them in completion order, silently scrambling paginated data).
+- **No silent drops** — every failed URL yields a `furl_error` in its slot, so
+  the output always matches the input length. Inspect failures with
+  `furl_errors()`.
+- **Automatic retries** — transient failures (network errors, HTTP 429, HTTP
+  5xx) are retried with exponential backoff.
+- **Configurable** — custom headers/auth, timeouts, user-agent, and
+  connection/multiplexing limits.
 
 ## Installation
 
-You can install the development version of furly from Github:
 ```r
+# development version
 devtools::install_github("melsiddieg/furly")
 ```
 
+`curl` is the only hard dependency. Install at least one JSON backend for
+`furly()`; `yyjsonr` (the R binding to [yyjson](https://github.com/ibireme/yyjson))
+is the recommended default, with `RcppSimdJson` required for JSON-Pointer
+queries and `jsonlite` as a universal fallback:
 
-``` r
-install.packages("furly")
+```r
+install.packages(c("yyjsonr", "RcppSimdJson"))  # optional, pick what you need
 ```
 
-## Example
+## Usage
 
-This is a basic example which shows you how to solve a common problem:
+### JSON convenience layer
 
-``` r
+```r
 library(furly)
-url <- "https://bit.ly/cellbase1"
-url2 <- "https://bit.ly/cellbase2"
-url3 <- "https://bit.ly/cellbase3"
-url4 <- "https://bit.ly/cellbase4"
-urls <- c(url,url2,url3,url4)
-res<-furly(urls)
+
+urls <- paste0(
+  "https://api.example.com/genes?limit=500",
+  "&skip=", c(0, 500, 1000, 1500)
+)
+
+res <- furly(urls)                      # parsed JSON, in input order
+res <- furly(urls, query = "/result")   # extract a JSON Pointer per document (RcppSimdJson)
+res <- furly(urls, parser = "yyjsonr")  # force a specific backend
+furl_errors(res)                        # which URLs failed, and why
 ```
+
+`furly()` stays backward compatible with the original `furly(urls, query = NULL)`
+signature.
+
+### Raw download engine
+
+Use `furl_download()` when you want the bytes rather than parsed JSON — any
+content type, optionally streamed to files:
+
+```r
+res <- furl_download(
+  urls,
+  headers   = c(Authorization = "Bearer <token>"),
+  timeout   = 30,
+  max_tries = 5,
+  host_con  = 8,       # concurrent connections per host
+  progress  = TRUE
+)
+
+# save bodies to disk instead of returning them
+furl_download(urls, destfiles = sprintf("out/%d.json", seq_along(urls)))
+```
+
+## Parser backends
+
+| Backend        | When it's used                        | Notes |
+|----------------|---------------------------------------|-------|
+| `yyjsonr`      | default (`parser = "auto"`, no query) | Fast; parses raw bytes; NDJSON + JSON writing |
+| `RcppSimdJson` | when `query` (JSON Pointer) is given  | Batch path extraction via `fparse(query=)` |
+| `jsonlite`     | universal fallback                    | Always available, slower |
 
 ## Benchmarks
-``` r
-bench <- microbenchmark::microbenchmark(
-  jsonlite= lapply(urls, function(x)jsonlite::fromJSON(x)),
-  RcppSimdJson = RcppSimdJson::fload(urls),
-  furly = furly(urls),times = 3
-)
+
+`bench/benchmark.R` runs a reproducible comparison against a local
+[`webfakes`](https://webfakes.r-lib.org) server:
+
+```r
+Rscript bench/benchmark.R 100
 ```
-<pre>
-Unit: relative
-        expr       min        lq      mean    median       uq       max neval
-    jsonlite  5.543655  5.839211  4.736492  6.126533  4.45725  3.535009     3
- RcppSimdJson 15.977387 18.850337 15.918384 21.643254 15.89797 12.723832     3
-       furly  1.000000  1.000000  1.000000  1.000000  1.00000  1.000000     3
-</pre>
+
+Note: `webfakes`' in-process test server handles requests **sequentially**, so
+the local benchmark measures parsing throughput and correctness — not the
+latency-hiding win of concurrency. That win shows up against real remote servers
+that accept concurrent connections, where `curl`'s multi interface overlaps the
+round-trips instead of paying them one at a time.
+
+## Verifying correctness
+
+The test suite (`tests/testthat/`) spins up a local `webfakes` server and checks
+order preservation, per-URL error reporting, retry-until-success, header
+delivery, and parser parity:
+
+```r
+devtools::test()
+```
