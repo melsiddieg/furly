@@ -17,7 +17,7 @@
 #'   `backoff * 2^(k - 1)`.
 #' @param total_con,host_con,multiplex Concurrency tuning passed to
 #'   [curl::new_pool()]: total simultaneous connections, per-host limit, and
-#'   HTTP/2 multiplexing. Applies to `engine = "curl"` only.
+#'   HTTP/2 multiplexing.
 #' @param progress Show a text progress bar.
 #' @param accept_encoding `Accept-Encoding` request header (libcurl's
 #'   `CURLOPT_ACCEPT_ENCODING`). Defaults to `"gzip"`: responses are requested
@@ -26,19 +26,13 @@
 #'   underlying libcurl supports (e.g. brotli/zstd if compiled in), or
 #'   `"identity"` to disable compression for already-compressed payloads (e.g.
 #'   binary files fetched with `destfiles`), avoiding wasted decompression.
-#' @param engine Concurrency backend: `"curl"` (default) drives `curl`'s
-#'   asynchronous multi interface directly; `"crul"` uses the optional
-#'   [`crul`][crul::crul-package] package's `AsyncVaried` interface over the
-#'   same libcurl core. Both preserve order, report per-URL failures, and retry
-#'   transient errors identically.
 #' @param destfiles Optional character vector of file paths, the same length as
 #'   `urls`. When supplied, each downloaded body is written to the corresponding
 #'   path (useful for saving binary payloads). The returned list then contains
 #'   the destination paths for successful downloads instead of response objects.
 #'
-#' @return A list aligned 1:1 with `urls`. Successful elements are response
-#'   objects (`curl` responses for `engine = "curl"`, `crul::HttpResponse`
-#'   objects for `engine = "crul"`; both expose `$status_code` and `$content`),
+#' @return A list aligned 1:1 with `urls`. Successful elements are `curl`
+#'   response objects (with `$status_code`, `$content`, `$headers`, `$times`),
 #'   or destination paths when `destfiles` is used. Failed elements are
 #'   `furl_error` objects. Retrieve just the failures with [furl_errors()].
 #'
@@ -61,9 +55,7 @@ furl_download <- function(urls,
                           multiplex = TRUE,
                           progress = FALSE,
                           destfiles = NULL,
-                          accept_encoding = "gzip",
-                          engine = c("curl", "crul")) {
-  engine <- match.arg(engine)
+                          accept_encoding = "gzip") {
   urls <- as.character(urls)
 
   if (!is.null(destfiles)) {
@@ -84,8 +76,7 @@ furl_download <- function(urls,
     host_con = host_con,
     multiplex = multiplex,
     progress = progress,
-    accept_encoding = accept_encoding,
-    engine = engine
+    accept_encoding = accept_encoding
   )
 
   if (!is.null(destfiles)) {

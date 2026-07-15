@@ -20,9 +20,9 @@ fan-out requests — while staying **correct**:
   5xx) are retried with exponential backoff.
 - **Configurable** — custom headers/auth, timeouts, user-agent, and
   connection/multiplexing limits.
-- **Pluggable engine** — download concurrently through `curl`'s multi interface
-  (default) or ropensci's [`crul`](https://docs.ropensci.org/crul/) async
-  client, with an identical order/error/retry contract either way.
+- **GET and POST** — issue `GET`, or `POST`/`PUT`/`PATCH` with per-request
+  bodies (JSON auto-serialized), for fan-out over write endpoints and batch
+  APIs.
 
 ## Installation
 
@@ -79,31 +79,6 @@ res <- furl_download(
 # save bodies to disk instead of returning them
 furl_download(urls, destfiles = sprintf("out/%d.json", seq_along(urls)))
 ```
-
-### Concurrency engines
-
-Both `furly()` and `furl_download()` take an `engine` argument that selects the
-backend issuing the concurrent requests:
-
-```r
-res <- furly(urls)                      # engine = "curl"  (default)
-res <- furly(urls, engine = "crul")     # ropensci's async client
-furl_download(urls, engine = "crul")    # same for the raw download engine
-```
-
-- **`"curl"`** (default) drives [`curl`](https://jeroen.r-lib.org/curl/)'s
-  asynchronous multi interface directly, with a tunable connection pool
-  (`total_con`, `host_con`, `multiplex`).
-- **`"crul"`** uses [`crul::AsyncVaried`](https://docs.ropensci.org/crul/), a
-  higher-level asynchronous HTTP client layered on the same libcurl multi core.
-  Install it with `install.packages("crul")`.
-
-Both engines make truly concurrent (non-blocking) requests over one shared
-event loop and honour the **identical contract** — input order preserved, a
-`furl_error` in every failed slot, and transient errors retried with
-exponential backoff — so switching engines never changes results, only the
-underlying client. Connection-pool tuning (`total_con`/`host_con`/`multiplex`)
-applies to the `curl` engine; the `crul` engine uses libcurl's default pool.
 
 ### Response compression
 
@@ -170,9 +145,9 @@ ahead of `jsonlite`:
 
 **vs. `httr` (concurrent vs sequential).** `bench/httr_benchmark.R` compares
 `furly()` against a sequential `httr` download loop on JSON-heavy payloads,
-across every parser backend and both engines. It needs a *concurrent* server,
-so it drives a small threaded one (`bench/json_server.py`) instead of the
-sequential `webfakes` process:
+across every parser backend. It needs a *concurrent* server, so it drives a
+small threaded one (`bench/json_server.py`) instead of the sequential
+`webfakes` process:
 
 ```r
 python3 bench/json_server.py 8099 &        # threaded JSON server

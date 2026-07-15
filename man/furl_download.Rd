@@ -16,8 +16,7 @@ furl_download(
   multiplex = TRUE,
   progress = FALSE,
   destfiles = NULL,
-  accept_encoding = "gzip",
-  engine = c("curl", "crul")
+  accept_encoding = "gzip"
 )
 }
 \arguments{
@@ -38,7 +37,7 @@ retried.}
 
 \item{total_con, host_con, multiplex}{Concurrency tuning passed to
 \code{\link[curl:multi]{curl::new_pool()}}: total simultaneous connections, per-host limit, and
-HTTP/2 multiplexing. Applies to \code{engine = "curl"} only.}
+HTTP/2 multiplexing.}
 
 \item{progress}{Show a text progress bar.}
 
@@ -54,17 +53,10 @@ transfer-size win on JSON/text APIs. Use \code{""} to advertise every codec the
 underlying libcurl supports (e.g. brotli/zstd if compiled in), or
 \code{"identity"} to disable compression for already-compressed payloads (e.g.
 binary files fetched with \code{destfiles}), avoiding wasted decompression.}
-
-\item{engine}{Concurrency backend: \code{"curl"} (default) drives \code{curl}'s
-asynchronous multi interface directly; \code{"crul"} uses the optional
-\code{\link[crul:crul-package]{crul}} package's \code{AsyncVaried} interface over the
-same libcurl core. Both preserve order, report per-URL failures, and retry
-transient errors identically.}
 }
 \value{
-A list aligned 1:1 with \code{urls}. Successful elements are response
-objects (\code{curl} responses for \code{engine = "curl"}, \code{crul::HttpResponse}
-objects for \code{engine = "crul"}; both expose \verb{$status_code} and \verb{$content}),
+A list aligned 1:1 with \code{urls}. Successful elements are \code{curl}
+response objects (with \verb{$status_code}, \verb{$content}, \verb{$headers}, \verb{$times}),
 or destination paths when \code{destfiles} is used. Failed elements are
 \code{furl_error} objects. Retrieve just the failures with \code{\link[=furl_errors]{furl_errors()}}.
 }

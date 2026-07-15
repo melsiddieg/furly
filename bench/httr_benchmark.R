@@ -1,5 +1,5 @@
 ## Comprehensive benchmark: furly (concurrent) vs httr (sequential) on
-## JSON-heavy payloads, across furly's parser backends and both engines.
+## JSON-heavy payloads, across furly's parser backends.
 ##
 ## Requires a *concurrent* server (bench/json_server.py, a threaded Python
 ## server) -- webfakes' in-process server is sequential and would hide furly's
@@ -15,7 +15,6 @@
 ##   furly_jsonlite         concurrent furly, jsonlite backend
 ##   furly_RcppSimdJson     concurrent furly, RcppSimdJson backend
 ##   furly_yyjsonr          concurrent furly, yyjsonr backend
-##   furly_yyjsonr_crul     concurrent furly, yyjsonr backend, engine = "crul"
 ##   RcppSimdJson_fload     RcppSimdJson's own concurrent fetch + parse
 ##
 ## Two scenarios:
@@ -31,7 +30,6 @@ suppressMessages({
   library(microbenchmark)
   ok_sj <- requireNamespace("RcppSimdJson", quietly = TRUE)
   ok_yy <- requireNamespace("yyjsonr", quietly = TRUE)
-  ok_crul <- requireNamespace("crul", quietly = TRUE)
 })
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -92,9 +90,6 @@ run_scenario <- function(label, n_records, delay_ms, times = 5L) {
   if (ok_sj) {
     exprs$furly_RcppSimdJson <- bquote(furly(urls, parser = "RcppSimdJson", host_con = .(host_con)))
     exprs$RcppSimdJson_fload <- quote(RcppSimdJson::fload(urls))
-  }
-  if (ok_crul && ok_yy) {
-    exprs$furly_yyjsonr_crul <- quote(furly(urls, parser = "yyjsonr", engine = "crul"))
   }
 
   mb <- microbenchmark::microbenchmark(list = exprs, times = times)

@@ -18,7 +18,6 @@ suppressMessages({
   library(ggplot2)
   ok_sj <- requireNamespace("RcppSimdJson", quietly = TRUE)
   ok_yy <- requireNamespace("yyjsonr", quietly = TRUE)
-  ok_crul <- requireNamespace("crul", quietly = TRUE)
 })
 
 args     <- commandArgs(trailingOnly = TRUE)
@@ -58,9 +57,6 @@ collect <- function(scenario, n_records, delay_ms) {
     exprs$furly_RcppSimdJson <- bquote(furly(urls, parser = "RcppSimdJson", host_con = .(host_con)))
     exprs$RcppSimdJson_fload <- quote(RcppSimdJson::fload(urls))
   }
-  if (ok_crul && ok_yy) {
-    exprs$furly_yyjsonr_crul <- quote(furly(urls, parser = "yyjsonr", engine = "crul"))
-  }
 
   mb <- microbenchmark::microbenchmark(list = exprs, times = times)
   data.frame(scenario = scenario, expr = as.character(mb$expr),
@@ -83,19 +79,17 @@ scale_y_reordered <- function(..., sep = "___") {
 }
 
 tool_of <- function(expr) {
-  ifelse(expr == "furly_yyjsonr_crul", "furly (crul engine)",
-  ifelse(grepl("^furly_", expr),       "furly (curl engine)",
-  ifelse(grepl("^httr_",  expr),       "httr (sequential)",
-                                        "RcppSimdJson::fload")))
+  ifelse(grepl("^furly_", expr), "furly (concurrent)",
+  ifelse(grepl("^httr_",  expr), "httr (sequential)",
+                                 "RcppSimdJson::fload"))
 }
 df$tool <- factor(tool_of(df$expr),
-                  levels = c("furly (curl engine)", "furly (crul engine)",
+                  levels = c("furly (concurrent)",
                              "httr (sequential)", "RcppSimdJson::fload"))
 df$yy <- reorder_within(df$expr, df$time_ms, df$scenario)
 
-# Validated categorical hues (dataviz skill, light mode): blue / aqua / red / yellow.
-pal <- c("furly (curl engine)"  = "#2a78d6",
-         "furly (crul engine)"  = "#1baf7a",
+# Validated categorical hues (dataviz skill, light mode): blue / red / yellow.
+pal <- c("furly (concurrent)"   = "#2a78d6",
          "httr (sequential)"    = "#e34948",
          "RcppSimdJson::fload"  = "#eda100")
 

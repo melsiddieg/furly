@@ -1,36 +1,23 @@
-# The `accept_encoding` argument controls the Accept-Encoding request header on
-# both engines. Default is "gzip"; "identity" disables compression; "" lets
-# libcurl advertise every codec it supports.
+# The `accept_encoding` argument controls the Accept-Encoding request header.
+# Default is "gzip"; "identity" disables compression; "" lets libcurl advertise
+# every codec it supports.
 
-encoding_seen <- function(engine, accept_encoding, srv) {
+encoding_seen <- function(accept_encoding, srv) {
   res <- furly(paste0(srv$url(), "echo"),
-               parser = "jsonlite", engine = engine,
-               accept_encoding = accept_encoding)
+               parser = "jsonlite", accept_encoding = accept_encoding)
   res[[1]]$ae
 }
 
-test_that("curl engine honours accept_encoding", {
+test_that("accept_encoding sets the Accept-Encoding request header", {
   skip_if_not_installed("webfakes")
   skip_if_not_installed("jsonlite")
   srv <- webfakes::local_app_process(new_test_app())
   on.exit(srv$stop(), add = TRUE)
 
-  expect_equal(encoding_seen("curl", "gzip", srv), "gzip")           # default
-  expect_equal(encoding_seen("curl", "identity", srv), "identity")   # disabled
+  expect_equal(encoding_seen("gzip", srv), "gzip")           # default
+  expect_equal(encoding_seen("identity", srv), "identity")   # disabled
   # "" advertises every codec libcurl was built with (>= gzip); never empty.
-  expect_match(encoding_seen("curl", "", srv), "gzip")
-})
-
-test_that("crul engine honours accept_encoding", {
-  skip_if_not_installed("crul")
-  skip_if_not_installed("webfakes")
-  skip_if_not_installed("jsonlite")
-  srv <- webfakes::local_app_process(new_test_app())
-  on.exit(srv$stop(), add = TRUE)
-
-  expect_equal(encoding_seen("crul", "gzip", srv), "gzip")
-  expect_equal(encoding_seen("crul", "identity", srv), "identity")
-  expect_match(encoding_seen("crul", "", srv), "gzip")
+  expect_match(encoding_seen("", srv), "gzip")
 })
 
 test_that("gzip responses are transparently decompressed", {
