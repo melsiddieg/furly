@@ -182,6 +182,21 @@ concurrency can't help, and the fast parsers (`yyjsonr`, `RcppSimdJson`) pull
 **~8–10× ahead of `jsonlite`**. Rule of thumb: pick `furly` for the fetch when
 data is remote; pick a fast parser when the bottleneck is parsing.
 
+`bench/plot_local_benchmark.R` renders these two scenarios as a violin plot
+(timing distributions over 20 runs each, log scale):
+
+```r
+python3 bench/json_server.py 8099 &
+Rscript bench/plot_local_benchmark.R 100 50 20   # -> bench/furly_vs_httr.png
+```
+
+![furly vs httr benchmark](bench/furly_vs_httr.png)
+
+Left (**latency-bound**): every `furly` config finishes in ~0.2–0.5 s while
+sequential `httr` sits at ~3 s — concurrency dominates. Right (**parse-bound**):
+with no latency to hide, the `jsonlite` configs blow out to ~3 s while the fast
+parsers cluster near ~0.3 s — the parser dominates.
+
 ## Verifying correctness
 
 The test suite (`tests/testthat/`) spins up a local `webfakes` server and checks
