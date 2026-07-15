@@ -108,16 +108,26 @@ every commit's detail:
 Rscript bench/benchmark.R melsiddieg/furly
 ```
 
-Fetching **16 commit endpoints** (median of 5 runs, from this repo):
+Fetching **16 JSON-heavy endpoints** (`/compare` diffs, ~656 KB total, up to
+110 KB each; median of 5 runs from this repo):
 
-| Method            | Median time | Speedup |
-|-------------------|------------:|--------:|
-| sequential loop   |      5.60 s |    1.0× |
-| `furly`           |      1.21 s |  **4.6×** |
+| Method                  | Median time | Speedup |
+|-------------------------|------------:|--------:|
+| `httr` (sequential)     |      6.09 s |    1.0× |
+| sequential `curl` loop  |      5.89 s |    1.0× |
+| `furly` (concurrent)    |      1.20 s |  **5.1×** |
 
-The speedup grows with the number of URLs and the per-request latency. Results
-are order-preserving with zero dropped responses. (Your exact numbers will vary
-with network conditions.)
+`httr` and `furly` both parse with `jsonlite` here, so this isolates the
+concurrency win — furly overlaps the round-trips that `httr::GET()` pays one at
+a time. The speedup grows with the number of URLs and the per-request latency.
+Results are order-preserving with zero dropped responses. (Your exact numbers
+will vary with network conditions.)
+
+On this network-bound workload the JSON backend barely matters — parsing all
+656 KB takes ~40 ms, versus ~1.2 s of network. A fast backend (`yyjsonr` /
+`RcppSimdJson`) pulls ahead in the **parse-only** portion of the benchmark,
+which strips the network out; run `bench/benchmark.R` with those packages
+installed to see it.
 
 There is also an offline mode that compares the JSON backends against a local
 [`webfakes`](https://webfakes.r-lib.org) server:
