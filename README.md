@@ -105,6 +105,20 @@ exponential backoff — so switching engines never changes results, only the
 underlying client. Connection-pool tuning (`total_con`/`host_con`/`multiplex`)
 applies to the `curl` engine; the `crul` engine uses libcurl's default pool.
 
+### Response compression
+
+Requests are sent with `Accept-Encoding: gzip` by default, and libcurl
+transparently decompresses the response — usually a large transfer-size win on
+JSON APIs (a GitHub commits page shrinks ~6× on the wire, 418 KB → 68 KB).
+Override it with `accept_encoding`:
+
+```r
+furl_download(urls)                              # gzip (default)
+furl_download(urls, accept_encoding = "")        # advertise every codec libcurl has (e.g. br/zstd)
+furl_download(urls, destfiles = paths,
+              accept_encoding = "identity")      # skip compression for already-compressed payloads
+```
+
 ## Parser backends
 
 | Backend        | When it's used                        | Notes |

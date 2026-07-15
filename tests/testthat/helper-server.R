@@ -28,8 +28,9 @@ new_test_app <- function() {
   app$get("/echo", function(req, res) {
     ua <- req$get_header("User-Agent"); if (is.null(ua)) ua <- ""
     xt <- req$get_header("X-Test");     if (is.null(xt)) xt <- ""
+    ae <- req$get_header("Accept-Encoding"); if (is.null(ae)) ae <- ""
     res$set_header("Content-Type", "application/json")
-    res$send(sprintf('{"ua": "%s", "x": "%s"}', ua, xt))
+    res$send(sprintf('{"ua": "%s", "x": "%s", "ae": "%s"}', ua, xt, ae))
   })
 
   app$get("/flaky/:key", function(req, res) {

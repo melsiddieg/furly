@@ -16,6 +16,7 @@ furl_download(
   multiplex = TRUE,
   progress = FALSE,
   destfiles = NULL,
+  accept_encoding = "gzip",
   engine = c("curl", "crul")
 )
 }
@@ -45,6 +46,14 @@ HTTP/2 multiplexing. Applies to \code{engine = "curl"} only.}
 \code{urls}. When supplied, each downloaded body is written to the corresponding
 path (useful for saving binary payloads). The returned list then contains
 the destination paths for successful downloads instead of response objects.}
+
+\item{accept_encoding}{\code{Accept-Encoding} request header (libcurl's
+\code{CURLOPT_ACCEPT_ENCODING}). Defaults to \code{"gzip"}: responses are requested
+gzip-compressed and transparently decompressed, usually a large
+transfer-size win on JSON/text APIs. Use \code{""} to advertise every codec the
+underlying libcurl supports (e.g. brotli/zstd if compiled in), or
+\code{"identity"} to disable compression for already-compressed payloads (e.g.
+binary files fetched with \code{destfiles}), avoiding wasted decompression.}
 
 \item{engine}{Concurrency backend: \code{"curl"} (default) drives \code{curl}'s
 asynchronous multi interface directly; \code{"crul"} uses the optional

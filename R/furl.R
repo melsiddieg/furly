@@ -19,6 +19,13 @@
 #'   [curl::new_pool()]: total simultaneous connections, per-host limit, and
 #'   HTTP/2 multiplexing. Applies to `engine = "curl"` only.
 #' @param progress Show a text progress bar.
+#' @param accept_encoding `Accept-Encoding` request header (libcurl's
+#'   `CURLOPT_ACCEPT_ENCODING`). Defaults to `"gzip"`: responses are requested
+#'   gzip-compressed and transparently decompressed, usually a large
+#'   transfer-size win on JSON/text APIs. Use `""` to advertise every codec the
+#'   underlying libcurl supports (e.g. brotli/zstd if compiled in), or
+#'   `"identity"` to disable compression for already-compressed payloads (e.g.
+#'   binary files fetched with `destfiles`), avoiding wasted decompression.
 #' @param engine Concurrency backend: `"curl"` (default) drives `curl`'s
 #'   asynchronous multi interface directly; `"crul"` uses the optional
 #'   [`crul`][crul::crul-package] package's `AsyncVaried` interface over the
@@ -54,6 +61,7 @@ furl_download <- function(urls,
                           multiplex = TRUE,
                           progress = FALSE,
                           destfiles = NULL,
+                          accept_encoding = "gzip",
                           engine = c("curl", "crul")) {
   engine <- match.arg(engine)
   urls <- as.character(urls)
@@ -76,6 +84,7 @@ furl_download <- function(urls,
     host_con = host_con,
     multiplex = multiplex,
     progress = progress,
+    accept_encoding = accept_encoding,
     engine = engine
   )
 
