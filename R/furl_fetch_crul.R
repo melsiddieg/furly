@@ -29,7 +29,8 @@ furl_fetch_crul <- function(urls,
                             useragent = NULL,
                             max_tries = 3L,
                             backoff = 1,
-                            progress = FALSE) {
+                            progress = FALSE,
+                            accept_encoding = "gzip") {
   urls <- as.character(urls)
   n <- length(urls)
   results <- vector("list", n)
@@ -39,12 +40,19 @@ furl_fetch_crul <- function(urls,
 
   hdrs <- if (is.null(headers)) list() else as.list(headers)
 
+  # crul sets CURLOPT_ACCEPT_ENCODING itself (to "gzip, deflate") and ignores an
+  # opts$accept_encoding we pass, so steer the advertised codec with an explicit
+  # Accept-Encoding *header* instead. crul's default opt still governs
+  # transparent decompression, so requesting "gzip" here decompresses as normal.
+  # An empty string means "every codec this libcurl supports", which is exactly
+  # crul's default advertisement -- so leave the header unset in that case.
+  if (nzchar(accept_encoding)) hdrs[["Accept-Encoding"]] <- accept_encoding
+
   # Build a GET HttpRequest for one URL, mirroring the curl engine's handle:
-  # honour timeout/user-agent, enable gzip, and negotiate HTTP/2 where possible.
+  # honour timeout/user-agent and negotiate HTTP/2 where possible.
   build_req <- function(url) {
     opts <- list(
       timeout = timeout,
-      accept_encoding = "gzip",
       http_version = 2L  # CURL_HTTP_VERSION_2TLS
     )
     if (!is.null(useragent)) opts$useragent <- useragent

@@ -30,6 +30,13 @@
 #'   multiplexing. Only the `"curl"` engine consumes these; the `"crul"` engine
 #'   uses libcurl's default asynchronous pool.
 #' @param progress Show a text progress bar while downloading.
+#' @param accept_encoding Value for the `Accept-Encoding` request header,
+#'   passed to libcurl's `CURLOPT_ACCEPT_ENCODING`. `"gzip"` (default) requests
+#'   gzip-compressed responses, which libcurl transparently decompresses --
+#'   typically a large transfer-size win on text/JSON APIs. Use `""` to
+#'   advertise every codec this libcurl build supports (e.g. brotli/zstd where
+#'   compiled in), or `"identity"` to disable compression for payloads that are
+#'   already compressed (avoiding wasted decompression).
 #' @param engine Concurrency backend: `"curl"` (default) or `"crul"`.
 #'
 #' @return A list of length `length(urls)`, aligned to input order.
@@ -45,6 +52,7 @@ furl_fetch <- function(urls,
                        host_con = 6L,
                        multiplex = TRUE,
                        progress = FALSE,
+                       accept_encoding = "gzip",
                        engine = c("curl", "crul")) {
   engine <- match.arg(engine)
 
@@ -60,7 +68,8 @@ furl_fetch <- function(urls,
       useragent = useragent,
       max_tries = max_tries,
       backoff = backoff,
-      progress = progress
+      progress = progress,
+      accept_encoding = accept_encoding
     ))
   }
 
@@ -74,7 +83,8 @@ furl_fetch <- function(urls,
     total_con = total_con,
     host_con = host_con,
     multiplex = multiplex,
-    progress = progress
+    progress = progress,
+    accept_encoding = accept_encoding
   )
 }
 
@@ -99,7 +109,8 @@ furl_fetch_curl <- function(urls,
                             total_con = 100L,
                             host_con = 6L,
                             multiplex = TRUE,
-                            progress = FALSE) {
+                            progress = FALSE,
+                            accept_encoding = "gzip") {
   urls <- as.character(urls)
   n <- length(urls)
   results <- vector("list", n)
@@ -108,14 +119,14 @@ furl_fetch_curl <- function(urls,
   max_tries <- max(1L, as.integer(max_tries))
 
   # Per-URL handle builder honouring headers/timeout/useragent and enabling
-  # gzip + HTTP/2 (which the multiplexing pool can share over one connection to
-  # the same host).
+  # response compression + HTTP/2 (which the multiplexing pool can share over
+  # one connection to the same host).
   build_handle <- function(url) {
     h <- curl::new_handle()
     curl::handle_setopt(
       h,
       timeout = timeout,
-      accept_encoding = "gzip",
+      accept_encoding = accept_encoding,
       http_version = 2L  # CURL_HTTP_VERSION_2TLS: negotiate HTTP/2 where possible
     )
     if (!is.null(useragent)) curl::handle_setopt(h, useragent = useragent)
