@@ -154,6 +154,34 @@ ahead of `jsonlite`:
 
 (Absolute numbers vary by machine; the ratios are the point.)
 
+**vs. `httr` (concurrent vs sequential).** `bench/httr_benchmark.R` compares
+`furly()` against a sequential `httr` download loop on JSON-heavy payloads,
+across every parser backend and both engines. It needs a *concurrent* server,
+so it drives a small threaded one (`bench/json_server.py`) instead of the
+sequential `webfakes` process:
+
+```r
+python3 bench/json_server.py 8099 &        # threaded JSON server
+Rscript bench/httr_benchmark.R 100 50      # n_urls, host_con
+```
+
+`bench/github_benchmark.R` runs the same comparison against the **live GitHub
+REST API** (paginated commit history — a moderately JSON-heavy, real-latency,
+real-world workload). Authenticate to lift the rate limit:
+
+```r
+GITHUB_TOKEN=$(gh auth token) Rscript bench/github_benchmark.R 40 30 10  # pages, per_page, host_con
+```
+
+The headline result across both: when requests carry real network latency,
+`furly`'s concurrency runs **~8–9× faster than sequential `httr`** (e.g. 1.5 s
+vs 13.6 s for 40 pages of the GitHub commits API), and the *parser* backend
+barely matters (~10%) because the workload is network-bound. When there is no
+latency to hide (huge local payloads), the picture flips: fetching is instant,
+concurrency can't help, and the fast parsers (`yyjsonr`, `RcppSimdJson`) pull
+**~8–10× ahead of `jsonlite`**. Rule of thumb: pick `furly` for the fetch when
+data is remote; pick a fast parser when the bottleneck is parsing.
+
 ## Verifying correctness
 
 The test suite (`tests/testthat/`) spins up a local `webfakes` server and checks
