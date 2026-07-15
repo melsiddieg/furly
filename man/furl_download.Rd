@@ -15,7 +15,8 @@ furl_download(
   host_con = 6L,
   multiplex = TRUE,
   progress = FALSE,
-  destfiles = NULL
+  destfiles = NULL,
+  engine = c("curl", "crul")
 )
 }
 \arguments{
@@ -36,7 +37,7 @@ retried.}
 
 \item{total_con, host_con, multiplex}{Concurrency tuning passed to
 \code{\link[curl:multi]{curl::new_pool()}}: total simultaneous connections, per-host limit, and
-HTTP/2 multiplexing.}
+HTTP/2 multiplexing. Applies to \code{engine = "curl"} only.}
 
 \item{progress}{Show a text progress bar.}
 
@@ -44,10 +45,17 @@ HTTP/2 multiplexing.}
 \code{urls}. When supplied, each downloaded body is written to the corresponding
 path (useful for saving binary payloads). The returned list then contains
 the destination paths for successful downloads instead of response objects.}
+
+\item{engine}{Concurrency backend: \code{"curl"} (default) drives \code{curl}'s
+asynchronous multi interface directly; \code{"crul"} uses the optional
+\code{\link[crul:crul-package]{crul}} package's \code{AsyncVaried} interface over the
+same libcurl core. Both preserve order, report per-URL failures, and retry
+transient errors identically.}
 }
 \value{
-A list aligned 1:1 with \code{urls}. Successful elements are \code{curl}
-response objects (with \code{$status_code}, \code{$content}, \code{$headers}, \code{$times}),
+A list aligned 1:1 with \code{urls}. Successful elements are response
+objects (\code{curl} responses for \code{engine = "curl"}, \code{crul::HttpResponse}
+objects for \code{engine = "crul"}; both expose \verb{$status_code} and \verb{$content}),
 or destination paths when \code{destfiles} is used. Failed elements are
 \code{furl_error} objects. Retrieve just the failures with \code{\link[=furl_errors]{furl_errors()}}.
 }

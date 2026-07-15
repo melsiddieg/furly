@@ -1,10 +1,16 @@
 #' Concurrent download engine (internal)
 #'
-#' Downloads many URLs concurrently with `curl`'s asynchronous multi
-#' interface, returning a list **aligned 1:1 with the input** `urls`. Each
-#' element is either a successful `curl` response or a `furl_error`. Transient
-#' failures (network errors, HTTP 429, HTTP 5xx) are retried with exponential
-#' backoff.
+#' Downloads many URLs concurrently, returning a list **aligned 1:1 with the
+#' input** `urls`. Each element is either a successful response object or a
+#' `furl_error`. Transient failures (network errors, HTTP 429, HTTP 5xx) are
+#' retried with exponential backoff.
+#'
+#' This dispatcher picks the concurrency engine: the default `"curl"` engine
+#' drives `curl`'s asynchronous multi interface directly (see
+#' [furl_fetch_curl()]); `"crul"` uses the higher-level [`crul::AsyncVaried`]
+#' interface layered on the same libcurl multi core (see [furl_fetch_crul()]).
+#' Both honour the identical order-preservation, per-URL error, and retry
+#' contract, so the choice is transparent to callers.
 #'
 #' This is the shared core used by [furl_download()] and [furly()]. It is not
 #' exported; use the public wrappers instead.
@@ -21,13 +27,13 @@
 #'   `backoff * 2^(k - 1)` before retrying.
 #' @param total_con,host_con,multiplex Passed to [curl::new_pool()] to tune the
 #'   total number of concurrent connections, the per-host limit, and HTTP/2
-#'   multiplexing.
+#'   multiplexing. Only the `"curl"` engine consumes these; the `"crul"` engine
+#'   uses libcurl's default asynchronous pool.
 #' @param progress Show a text progress bar while downloading.
+#' @param engine Concurrency backend: `"curl"` (default) or `"crul"`.
 #'
 #' @return A list of length `length(urls)`, aligned to input order.
 #' @keywords internal
-#' @importFrom curl new_pool multi_run curl_fetch_multi new_handle handle_setopt handle_setheaders
-#' @importFrom utils txtProgressBar setTxtProgressBar
 #' @noRd
 furl_fetch <- function(urls,
                        headers = NULL,
@@ -38,7 +44,62 @@ furl_fetch <- function(urls,
                        total_con = 100L,
                        host_con = 6L,
                        multiplex = TRUE,
-                       progress = FALSE) {
+                       progress = FALSE,
+                       engine = c("curl", "crul")) {
+  engine <- match.arg(engine)
+
+  if (engine == "crul") {
+    if (!requireNamespace("crul", quietly = TRUE)) {
+      stop("engine = 'crul' requires the 'crul' package. ",
+           "Install it with install.packages('crul').", call. = FALSE)
+    }
+    return(furl_fetch_crul(
+      urls,
+      headers = headers,
+      timeout = timeout,
+      useragent = useragent,
+      max_tries = max_tries,
+      backoff = backoff,
+      progress = progress
+    ))
+  }
+
+  furl_fetch_curl(
+    urls,
+    headers = headers,
+    timeout = timeout,
+    useragent = useragent,
+    max_tries = max_tries,
+    backoff = backoff,
+    total_con = total_con,
+    host_con = host_con,
+    multiplex = multiplex,
+    progress = progress
+  )
+}
+
+#' Concurrent download engine backed by curl's multi interface (internal)
+#'
+#' The default engine dispatched to by [furl_fetch()]. See that function for the
+#' shared contract. Uses `curl`'s asynchronous multi interface with a tunable
+#' connection pool and HTTP/2 multiplexing.
+#'
+#' @inheritParams furl_fetch
+#' @return A list of length `length(urls)`, aligned to input order.
+#' @keywords internal
+#' @importFrom curl new_pool multi_run curl_fetch_multi new_handle handle_setopt handle_setheaders
+#' @importFrom utils txtProgressBar setTxtProgressBar
+#' @noRd
+furl_fetch_curl <- function(urls,
+                            headers = NULL,
+                            timeout = 0,
+                            useragent = NULL,
+                            max_tries = 3L,
+                            backoff = 1,
+                            total_con = 100L,
+                            host_con = 6L,
+                            multiplex = TRUE,
+                            progress = FALSE) {
   urls <- as.character(urls)
   n <- length(urls)
   results <- vector("list", n)

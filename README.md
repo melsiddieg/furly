@@ -6,8 +6,8 @@ An R package for **blazing-fast concurrent downloads** and JSON parsing.
 <!-- badges: start -->
 <!-- badges: end -->
 
-`furly` combines `curl`'s asynchronous, HTTP/2-multiplexing multi interface with
-a fast, pluggable JSON parser (`yyjsonr`, `RcppSimdJson`, or `jsonlite`). It is
+`furly` combines an asynchronous, HTTP/2-multiplexing download engine with a
+fast, pluggable JSON parser (`yyjsonr`, `RcppSimdJson`, or `jsonlite`). It is
 built for fetching many endpoints at once — paginated APIs, batches of records,
 fan-out requests — while staying **correct**:
 
@@ -20,6 +20,9 @@ fan-out requests — while staying **correct**:
   5xx) are retried with exponential backoff.
 - **Configurable** — custom headers/auth, timeouts, user-agent, and
   connection/multiplexing limits.
+- **Pluggable engine** — download concurrently through `curl`'s multi interface
+  (default) or ropensci's [`crul`](https://docs.ropensci.org/crul/) async
+  client, with an identical order/error/retry contract either way.
 
 ## Installation
 
@@ -77,6 +80,31 @@ res <- furl_download(
 furl_download(urls, destfiles = sprintf("out/%d.json", seq_along(urls)))
 ```
 
+### Concurrency engines
+
+Both `furly()` and `furl_download()` take an `engine` argument that selects the
+backend issuing the concurrent requests:
+
+```r
+res <- furly(urls)                      # engine = "curl"  (default)
+res <- furly(urls, engine = "crul")     # ropensci's async client
+furl_download(urls, engine = "crul")    # same for the raw download engine
+```
+
+- **`"curl"`** (default) drives [`curl`](https://jeroen.r-lib.org/curl/)'s
+  asynchronous multi interface directly, with a tunable connection pool
+  (`total_con`, `host_con`, `multiplex`).
+- **`"crul"`** uses [`crul::AsyncVaried`](https://docs.ropensci.org/crul/), a
+  higher-level asynchronous HTTP client layered on the same libcurl multi core.
+  Install it with `install.packages("crul")`.
+
+Both engines make truly concurrent (non-blocking) requests over one shared
+event loop and honour the **identical contract** — input order preserved, a
+`furl_error` in every failed slot, and transient errors retried with
+exponential backoff — so switching engines never changes results, only the
+underlying client. Connection-pool tuning (`total_con`/`host_con`/`multiplex`)
+applies to the `curl` engine; the `crul` engine uses libcurl's default pool.
+
 ## Parser backends
 
 | Backend        | When it's used                        | Notes |
@@ -87,8 +115,10 @@ furl_download(urls, destfiles = sprintf("out/%d.json", seq_along(urls)))
 
 ## Benchmarks
 
-`bench/benchmark.R` runs a reproducible comparison against a local
-[`webfakes`](https://webfakes.r-lib.org) server:
+**End-to-end (download + parse).** `bench/benchmark.R` runs a reproducible
+comparison against a local [`webfakes`](https://webfakes.r-lib.org) server,
+covering a `jsonlite` sequential loop, `RcppSimdJson::fload`, and `furly()` with
+each installed backend:
 
 ```r
 Rscript bench/benchmark.R 100
@@ -99,6 +129,58 @@ the local benchmark measures parsing throughput and correctness — not the
 latency-hiding win of concurrency. That win shows up against real remote servers
 that accept concurrent connections, where `curl`'s multi interface overlaps the
 round-trips instead of paying them one at a time.
+
+**Parser backends only.** `bench/parse_benchmark.R` isolates the JSON parsing
+layer — no network — so you can compare raw throughput of the `yyjsonr`,
+`RcppSimdJson`, and `jsonlite` backends (plus the `RcppSimdJson` JSON-Pointer
+`query=` path) on a synthesized corpus of raw JSON bodies:
+
+```r
+Rscript bench/parse_benchmark.R 2000 300   # n_docs, values_per_doc
+```
+
+Each backend is checked for correctness before timing. `microbenchmark` is used
+when installed; otherwise the script falls back to a built-in `replicate()`
+timer so it runs with no extra dependencies. A representative run parsing 2000
+documents (~2.7 MB) shows `RcppSimdJson` and `yyjsonr` an order of magnitude
+ahead of `jsonlite`:
+
+| Backend               | Median (ms) |
+|-----------------------|-------------|
+| `RcppSimdJson` (query)| ~3          |
+| `RcppSimdJson`        | ~5          |
+| `yyjsonr`             | ~7          |
+| `jsonlite`            | ~145        |
+
+(Absolute numbers vary by machine; the ratios are the point.)
+
+**vs. `httr` (concurrent vs sequential).** `bench/httr_benchmark.R` compares
+`furly()` against a sequential `httr` download loop on JSON-heavy payloads,
+across every parser backend and both engines. It needs a *concurrent* server,
+so it drives a small threaded one (`bench/json_server.py`) instead of the
+sequential `webfakes` process:
+
+```r
+python3 bench/json_server.py 8099 &        # threaded JSON server
+Rscript bench/httr_benchmark.R 100 50      # n_urls, host_con
+```
+
+`bench/github_benchmark.R` runs the same comparison against the **live GitHub
+REST API** (paginated commit history — a moderately JSON-heavy, real-latency,
+real-world workload). Authenticate to lift the rate limit:
+
+```r
+GITHUB_TOKEN=$(gh auth token) Rscript bench/github_benchmark.R 40 30 10  # pages, per_page, host_con
+```
+
+The headline result across both: when requests carry real network latency,
+`furly`'s concurrency runs **~8–9× faster than sequential `httr`** (e.g. 1.5 s
+vs 13.6 s for 40 pages of the GitHub commits API), and the *parser* backend
+barely matters (~10%) because the workload is network-bound. When there is no
+latency to hide (huge local payloads), the picture flips: fetching is instant,
+concurrency can't help, and the fast parsers (`yyjsonr`, `RcppSimdJson`) pull
+**~8–10× ahead of `jsonlite`**. Rule of thumb: pick `furly` for the fetch when
+data is remote; pick a fast parser when the bottleneck is parsing.
 
 ## Verifying correctness
 
